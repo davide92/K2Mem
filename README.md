@@ -1,7 +1,8 @@
 master_thesis
+=============
 
 kraken2
-=======
+-------
 
 The second version of the Kraken taxonomic sequence classification system
 
