@@ -81,7 +81,7 @@ struct OutputData {
 };
 
 //structure for saving sequennce classification result and minimizer not classified
-struct MinimizerData {
+struct UnknownMinimizerData {
   uint64_t final_tax_id;
   vector<uint64_t> minimizer;
 };
@@ -96,7 +96,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames);
+    vector<string> &tx_frames, UnknownMinimizerData &minimizer_data);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -181,6 +181,7 @@ int main(int argc, char **argv) {
   }
 
   //save updated hash minimizer-taxid in file hash_plus.k2d
+  hash_ptr->WriteTable(opts.index_filename.c_str());
 
   return 0;
 }
@@ -290,6 +291,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     Sequence seq1, seq2;
     uint64_t block_id;
     OutputData out_data;
+    UnknownMinimizerData minimizer_data;
 
     while (true) {
       thread_stats.total_sequences = 0;
@@ -351,7 +353,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         auto call = ClassifySequence(seq1, seq2,
             kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-            taxa, hit_counts, translated_frames);
+            taxa, hit_counts, translated_frames, minimizer_data);
         if (call) {
           char buffer[1024] = "";
           sprintf(buffer, " kraken:taxid|%lu", tax.nodes()[call].external_id);
@@ -418,8 +420,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
           call_counts[call]++;
         }
       }
-
-      //add minimizer to hash_ptr
 
       if (! outputs.initialized) {
         InitializeOutputs(opts, outputs, reader1.file_format());
@@ -557,7 +557,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames)
+    vector<string> &tx_frames, UnknownMinimizerData &minimizer_data)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -602,7 +602,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             last_minimizer = *minimizer_ptr;
             if (taxon == 0) 
             {
-              //save minimizer value
+              minimizer_data.minimizer.push_back(*minimizer_ptr);
             }
           }
           else {
@@ -632,8 +632,24 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     total_kmers--;  // account for the mate pair marker
   if (opts.use_translated_search)  // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
-  if (! opts.quick_mode)
+  if (! opts.quick_mode)  {
     call = ResolveTree(hit_counts, taxonomy, total_kmers, opts);
+
+    if(minimizer_data.minimizer.size() != 0) {
+      minimizer_data.final_tax_id = call;
+    }
+  }
+
+  #pragma omp critical(update_hash)
+  {
+    hvalue_t old_value = 0;
+    hvalue_t final_tax_id = minimizer_data.final_tax_id;
+    bool result;
+    for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it)
+    {
+      result = hash->CompareAndSet(*it, final_tax_id, &old_value);
+    }
+  }
 
   if (call)
     stats.total_classified++;

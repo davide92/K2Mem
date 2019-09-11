@@ -4,7 +4,7 @@ CXXFLAGS += -DLINEAR_PROBING
 
 .PHONY: all clean install
 
-PROGS = estimate_capacity build_db classify_plus classify dump_table lookup_accession_numbers
+PROGS = estimate_capacity build_db classify classify_plus dump_table lookup_accession_numbers
 
 all: $(PROGS)
 

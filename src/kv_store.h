@@ -17,6 +17,8 @@ typedef uint32_t hvalue_t;
 class KeyValueStore {
   public:
   virtual hvalue_t Get(hkey_t key) = 0;
+  virtual bool CompareAndSet(hkey_t key, hvalue_t new_value, hvalue_t *old_value) = 0;
+  virtual void WriteTable(const char *filename) = 0;
   virtual ~KeyValueStore() { }
 };
 
