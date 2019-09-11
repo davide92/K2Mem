@@ -181,6 +181,7 @@ int main(int argc, char **argv) {
   }
 
   //save updated hash minimizer-taxid in file hash_plus.k2d
+  fprintf(stdout, "Write updated minimizer taxID map.\n");
   hash_ptr->WriteTable(opts.index_filename.c_str());
 
   return 0;
@@ -635,7 +636,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   if (! opts.quick_mode)  {
     call = ResolveTree(hit_counts, taxonomy, total_kmers, opts);
 
-    if(minimizer_data.minimizer.size() != 0) {
+    fprintf(stdout, "Number of not classified minimizer: %lu.\n", 
+          minimizer_data.minimizer.size());
+
+    if(minimizer_data.minimizer.size() != 0) {       
       minimizer_data.final_tax_id = call;
     }
   }
@@ -648,6 +652,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it)
     {
       result = hash->CompareAndSet(*it, final_tax_id, &old_value);
+      fprintf(stdout, "Result for the %lu minimuzer is : %i\n", 
+          *it, result);
     }
   }
 
