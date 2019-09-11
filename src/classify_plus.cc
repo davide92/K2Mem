@@ -80,6 +80,12 @@ struct OutputData {
   string unclassified_out2_str;
 };
 
+//structure for saving sequennce classification result and minimizer not classified
+struct MinimizerData {
+  uint64_t final_tax_id;
+  vector<uint64_t> minimizer;
+};
+
 void ParseCommandLine(int argc, char **argv, Options &opts);
 void usage(int exit_code=EX_USAGE);
 void ProcessFiles(const char *filename1, const char *filename2,
@@ -173,6 +179,8 @@ int main(int argc, char **argv) {
           call_counts, stats.total_sequences, total_unclassified);
     }
   }
+
+  //save updated hash minimizer-taxid in file hash_plus.k2d
 
   return 0;
 }
@@ -411,6 +419,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
       }
 
+      //add minimizer to hash_ptr
+
       if (! outputs.initialized) {
         InitializeOutputs(opts, outputs, reader1.file_format());
       }
@@ -590,6 +600,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               taxon = hash->Get(*minimizer_ptr);
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
+            if (taxon == 0) 
+            {
+              //save minimizer value
+            }
           }
           else {
             taxon = last_taxon;

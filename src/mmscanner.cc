@@ -131,11 +131,11 @@ uint64_t *MinimizerScanner::NextMinimizer(bool *ambig_flag) {
         queue_pos_ = 0;
         lmer_ = 0;
         loaded_ch_ = 0;
-        last_ambig_ |= ambig_code;
+        last_ambig_ |= ambig_code; //bitwise OR assignment
       }
       else
         lmer_ |= lookup_code;
-      lmer_ &= lmer_mask_;
+      lmer_ &= lmer_mask_; //bitwise AND assignment
       last_ambig_ &= lmer_mask_;
       // non-null arg means we need to do some special handling
       if (ambig_flag != nullptr) {
