@@ -361,7 +361,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          string rank;
+          /*string rank;
           while(true) {
             rank = tax.rank_data() + node.rank_offset;
             if (rank == "genus") {
@@ -378,7 +378,24 @@ void ProcessFiles(const char *filename1, const char *filename2,
             else {
               node = tax.nodes()[node.parent_id];
             }
+          }*/
+
+          while(true) {
+            if (IsGenus(tax, node)) {
+                thread_stats.total_assegned_g++;
+                break;
+            }
+            else if (IsSpecies(tax, node)) { 
+              thread_stats.total_assegned_s++;
+              break;
+            } else if (IsOther(tax, node)) {
+              break;
+            }
+            else {
+              node = tax.nodes()[node.parent_id];
+            }
           }
+
           /* <--- end added part ---> */
           seq1.header += buffer;
           seq2.header += buffer;
@@ -565,6 +582,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   taxa.clear();
   hit_counts.clear();
   auto frame_ct = opts.use_translated_search ? 6 : 1;
+  minimizer_data.final_tax_id = 0;
+  minimizer_data.minimizer.clear();
 
   for (int mate_num = 0; mate_num < 2; mate_num++) {
     if (mate_num == 1 && ! opts.paired_end_processing)
@@ -601,8 +620,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               taxon = hash->Get(*minimizer_ptr);
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
-            if (taxon == 0) 
-            {
+            if (taxon == 0) { //minimizer not present in the database
+              fprintf(stdout, "Minimizer %lu not present in the DB.\n", *minimizer_ptr);
               minimizer_data.minimizer.push_back(*minimizer_ptr);
             }
           }
@@ -645,16 +664,27 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   }
 
   #pragma omp critical(update_hash)
-  {
-    hvalue_t old_value = 0;
-    hvalue_t final_tax_id = minimizer_data.final_tax_id;
-    bool result;
-    for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it)
-    {
-      result = hash->CompareAndSet(*it, final_tax_id, &old_value);
-      fprintf(stdout, "Result for the %lu minimuzer is : %i\n", 
-          *it, result);
-    }
+  { 
+    TaxonomyNode node = taxonomy.nodes()[minimizer_data.final_tax_id];
+    while(true) {
+      if(IsSpecies(taxonomy, node)) { 
+        hvalue_t old_value = 0;
+        hvalue_t final_tax_id = minimizer_data.final_tax_id;
+        bool result;
+        for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it)
+        {
+          result = hash->CompareAndSet(*it, final_tax_id, &old_value);
+          fprintf(stdout, "Result for the %lu minimuzer is : %i\n", 
+              *it, result);
+        }
+      } 
+      else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
+        minimizer_data.minimizer.clear();
+      }
+      else {
+        node = taxonomy.nodes()[node.parent_id];
+      }
+    }    
   }
 
   if (call)
@@ -851,18 +881,22 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
         break;
       case 'R' :
         opts.report_filename = optarg;
+        opts.report_filename.insert(opts.report_filename.length(), "_plus");
         break;
       case 'z' :
         opts.report_zero_counts = true;
         break;
       case 'C' :
         opts.classified_output_filename = optarg;
+        opts.classified_output_filename.insert(opts.classified_output_filename.length(), "_plus");
         break;
       case 'U' :
         opts.unclassified_output_filename = optarg;
+        opts.unclassified_output_filename.insert(opts.unclassified_output_filename.length(), "_plus");
         break;
       case 'O' :
         opts.kraken_output_filename = optarg;
+        opts.kraken_output_filename.insert(opts.kraken_output_filename.length(), "_plus");
         break;
       case 'n' :
         opts.print_scientific_name = true;

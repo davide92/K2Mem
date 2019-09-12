@@ -50,4 +50,41 @@ vector<string> SplitString
   return output;
 }
 
+bool IsSpecies(Taxonomy &tax, TaxonomyNode &node) 
+{ 
+  bool is_species = false;
+  string rank = tax.rank_data() + node.rank_offset;
+
+  if (rank == "species") {
+    is_species = true;
+  }
+
+  return is_species;
+}
+
+bool IsGenus(Taxonomy &tax, TaxonomyNode &node) 
+{ 
+  bool is_genus = false;
+  string rank = tax.rank_data() + node.rank_offset;
+  
+  if (rank == "genus") {
+    is_genus = true;
+  }
+
+  return is_genus;
+}
+
+bool IsOther(Taxonomy &tax, TaxonomyNode &node) 
+{
+  bool is_other = false;
+  string rank = tax.rank_data() + node.rank_offset;
+  
+  if (rank == "root" || rank == "superkingdom" || rank == "kingdom" 
+    || rank == "phylum" || rank == "class" || rank == "order" || rank == "family") {
+    is_other = true;
+  }
+
+  return is_other; 
+}
+
 }

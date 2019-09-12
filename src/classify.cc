@@ -350,7 +350,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          string rank;
+          /*string rank;
           while(true) {
             rank = tax.rank_data() + node.rank_offset;
             if (rank == "genus") {
@@ -367,7 +367,25 @@ void ProcessFiles(const char *filename1, const char *filename2,
             else {
               node = tax.nodes()[node.parent_id];
             }
+          }*/
+
+          while(true) {
+            if (IsGenus(tax, node)) {
+                thread_stats.total_assegned_g++;
+                break;
+            }
+            else if (IsSpecies(tax, node)) { 
+              thread_stats.total_assegned_s++;
+              break;
+            } else if (IsOther(tax, node)) {
+              break;
+            }
+            else {
+              node = tax.nodes()[node.parent_id];
+            }
           }
+
+          /* <--- end added part ---> */
           /* <--- end added part ---> */
           seq1.header += buffer;
           seq2.header += buffer;

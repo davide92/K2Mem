@@ -8,6 +8,7 @@
 #define KRAKEN2_UTILITIES_H_
 
 #include "kraken2_headers.h"
+#include "taxonomy.h"
 
 // Functions used by 2+ programs that I couldn't think of a better place for.
 
@@ -22,6 +23,11 @@ void ExpandSpacedSeedMask(uint64_t &spaced_seed_mask, const int bit_expansion_fa
 std::vector<std::string> SplitString(const std::string &str,
   const std::string &delim = "\t", const size_t max_fields = (size_t) -1);
 
+bool IsSpecies(Taxonomy &tax, TaxonomyNode &node);
+
+bool IsGenus(Taxonomy &tax, TaxonomyNode &node);
+
+bool IsOther(Taxonomy &tax, TaxonomyNode &node);
 }
 
 #endif
