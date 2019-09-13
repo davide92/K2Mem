@@ -223,19 +223,15 @@ void ReportStats(struct timeval time1, struct timeval time2,
   fprintf(stderr, "GENUS LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at genus level (sequences at species level not counted).\n", 
           (unsigned long long) stats.total_assegned_g);
-  fprintf(stderr, "  precision at genus level: %.2f.\n", 
-          precision_g);
-  fprintf(stderr, "  recall at genus level: %.2f.\n", 
-          recall_g);    
-  fprintf(stderr, "  f-measure at genus level: %.2f.\n\n", f_mesure_g);
+  fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
+  fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
+  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g * 100.0);
   fprintf(stderr, "SPECIES LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at species level.\n", 
           (unsigned long long) stats.total_assegned_s);
-  fprintf(stderr, "  precision at species level: %.2f.\n", 
-          precision_s);
-  fprintf(stderr, "  recall at species level: %.2f.\n", 
-          recall_s);
-  fprintf(stderr, "  f-measure at species level: %.2f.\n", f_mesure_s);
+  fprintf(stderr, "  precision at species level: %.2f%%.\n", precision_s * 100.0);
+  fprintf(stderr, "  recall at species level: %.2f%%.\n", recall_s * 100.0);
+  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s * 100.0);
   
 }
 
@@ -556,7 +552,7 @@ std::string TrimPairInfo(std::string &id) {
   size_t sz = id.size();
   if (sz <= 2)
     return id;
-  if ( (id[sz - 2] == '_' || ispunct(id[sz - 2])) && isdigit(id[sz - 1]) )
+  if ( id[sz - 2] == '/' && (id[sz - 1] == '1' || id[sz - 1] == '2') )
     return id.substr(0, sz - 2);
   return id;
 }
