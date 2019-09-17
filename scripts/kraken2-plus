@@ -96,7 +96,10 @@ if (! -e "$db_prefix/hash_plus.k2d") {
   copy("$db_prefix/hash.k2d", "$db_prefix/hash_plus.k2d");
 }
 my $kht_file = "$db_prefix/hash_plus.k2d";
-my $opt_file = "$db_prefix/opts.k2d";
+if (! -e "$db_prefix/opts_plus.k2d") {
+  copy("$db_prefix/opts.k2d", "$db_prefix/opts_plus.k2d");
+}
+my $opt_file = "$db_prefix/opts_plus.k2d";
 for my $file ($taxonomy, $kht_file, $opt_file) {
   if (! -e $file) {
     die "$PROG: $file does not exist!\n";
@@ -179,8 +182,8 @@ exec $CLASSIFY_PLUS, @flags, @ARGV;
 die "$PROG: exec error: $!\n";
 
 
-exec $CLASSIFY, @flags, @ARGV;
-die "$PROG: exec error: $!\n";
+#exec $CLASSIFY, @flags, @ARGV;
+#die "$PROG: exec error: $!\n";
 
 sub usage {
   my $exit_code = @_ ? shift : 64;

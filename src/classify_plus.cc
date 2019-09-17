@@ -80,10 +80,10 @@ struct OutputData {
   string unclassified_out2_str;
 };
 
-//structure for saving sequennce classification result and minimizer not classified
+//structure for saving sequence classification result and minimizer not classified
 struct UnknownMinimizerData {
-  uint64_t final_tax_id;
-  vector<uint64_t> minimizer;
+  uint64_t minimizer;
+  uint64_t final_tax_id;  
 };
 
 void ParseCommandLine(int argc, char **argv, Options &opts);
@@ -93,10 +93,10 @@ void ProcessFiles(const char *filename1, const char *filename2,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts);
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
-    KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
+    KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames);
+    vector<string> &tx_frames, vector<UnknownMinimizerData> &minimizer_data);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -288,6 +288,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     Sequence seq1, seq2;
     uint64_t block_id;
     OutputData out_data;
+    vector<UnknownMinimizerData> minimizer_data;
 
     while (true) {
       thread_stats.total_sequences = 0;
@@ -295,6 +296,10 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_classified = 0;
       thread_stats.total_assegned_g = 0;
       thread_stats.total_assegned_s = 0;
+     
+      if(minimizer_data.size() != 0) {
+        minimizer_data.clear();
+      }
 
       auto ok_read = false;
 
@@ -349,32 +354,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         auto call = ClassifySequence(seq1, seq2,
             kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-            taxa, hit_counts, translated_frames);
+            taxa, hit_counts, translated_frames, minimizer_data);
         if (call) {
           char buffer[1024] = "";
           sprintf(buffer, " kraken:taxid|%lu", tax.nodes()[call].external_id);
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          /*string rank;
-          while(true) {
-            rank = tax.rank_data() + node.rank_offset;
-            if (rank == "genus") {
-                thread_stats.total_assegned_g++;
-                break;
-            }
-            else if (rank == "species") { 
-              thread_stats.total_assegned_s++;
-              break;
-            } else if (rank == "root" || rank == "superkingdom" || rank == "kingdom" || rank == "phylum"
-                      || rank == "class" || rank == "order" || rank == "family") {
-              break;
-            }
-            else {
-              node = tax.nodes()[node.parent_id];
-            }
-          }*/
-
+          
           while(true) {
             if (IsGenus(tax, node)) {
                 thread_stats.total_assegned_g++;
@@ -407,6 +394,30 @@ void ProcessFiles(const char *filename1, const char *filename2,
         thread_stats.total_bases += seq1.seq.size();
         if (opts.paired_end_processing)
           thread_stats.total_bases += seq2.seq.size();
+
+        //add minimizer to the hashmap
+        if (minimizer_data.size() != 0) {
+          #pragma omp critical(update_hash)
+          {  
+            hvalue_t existing_taxid = 0;
+            hvalue_t new_taxid = 0;    
+            /*for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it) {
+            result = hash->CompareAndSet(*it, new_taxid, &existing_taxid);
+            fprintf(stdout, "Result for the %lu minimizer is : %i\n", *it, result);
+            while (! hash.CompareAndSet(*minimizer_ptr, new_taxid, &existing_taxid)) { //collision handler
+              new_taxid = tax.LowestCommonAncestor(new_taxid, existing_taxid);
+            }*/
+            for (auto &md : minimizer_data) {
+              existing_taxid = 0;
+              new_taxid = md.final_tax_id;
+              /*result = hash->CompareAndSet(minimizer, new_taxid, &existing_taxid);
+              fprintf(stdout, "Result for the %lu minimizer is : %i\n", minimizer, result);*/
+              while (! hash->CompareAndSet(md.minimizer, new_taxid, &existing_taxid)) { //collision handler
+                new_taxid = tax.LowestCommonAncestor(new_taxid, existing_taxid);
+              }
+            }
+          }
+        }
       }
 
       #pragma omp atomic
@@ -570,14 +581,13 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames)
+    vector<string> &tx_frames, vector<UnknownMinimizerData> &minimizer_data)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
   taxa.clear();
   hit_counts.clear();
   auto frame_ct = opts.use_translated_search ? 6 : 1;
-  UnknownMinimizerData minimizer_data;
 
   for (int mate_num = 0; mate_num < 2; mate_num++) {
     if (mate_num == 1 && ! opts.paired_end_processing)
@@ -598,6 +608,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       taxid_t last_taxon = TAXID_MAX;
       bool ambig_flag = false;
       while ((minimizer_ptr = scanner.NextMinimizer(&ambig_flag)) != nullptr) {
+        UnknownMinimizerData umd = {0, 0};
         taxid_t taxon;
         if (ambig_flag) {
           taxon = AMBIGUOUS_SPAN_TAXON;
@@ -616,7 +627,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             last_minimizer = *minimizer_ptr;
             if (taxon == 0) { //minimizer not present in the database
               fprintf(stdout, "Minimizer %lu not present in the DB.\n", *minimizer_ptr);
-              minimizer_data.minimizer.push_back(*minimizer_ptr);
+              //minimizer_data.minimizer.push_back(*minimizer_ptr);
+              umd.minimizer = *minimizer_ptr;
+              umd.final_tax_id = 0;
+              minimizer_data.push_back(umd); 
             }
           }
           else {
@@ -650,40 +664,27 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     call = ResolveTree(hit_counts, taxonomy, total_kmers, opts);
 
     fprintf(stdout, "Number of not classified minimizer: %lu.\n", 
-          minimizer_data.minimizer.size());
+          minimizer_data.size());
 
-    if(minimizer_data.minimizer.size() != 0) {       
-      minimizer_data.final_tax_id = call;
-    }
-
-    TaxonomyNode node = taxonomy.nodes()[minimizer_data.final_tax_id];
-    bool result;
+    TaxonomyNode node = taxonomy.nodes()[call];
     while(true) {
-      if(IsSpecies(taxonomy, node)) {
-        #pragma omp critical(update_hash)
-        {     
-          hvalue_t existing_taxid = 0;
-          hvalue_t new_taxid = minimizer_data.final_tax_id;
-          
-          for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it) {
-            result = hash->CompareAndSet(*it, new_taxid, &existing_taxid);
-            fprintf(stdout, "Result for the %lu minimizer is : %i\n", *it, result);
-            /*while (! hash.CompareAndSet(*minimizer_ptr, new_taxid, &existing_taxid)) { //collision handler
-              new_taxid = tax.LowestCommonAncestor(new_taxid, existing_taxid);
-            }*/
-          }
-        }
+      if(IsSpecies(taxonomy, node)) {  
+        for (uint64_t i = 0; i < minimizer_data.size(); ++i) {
+          minimizer_data[i].final_tax_id = call;
+        }      
         break; 
       }
       else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
+        minimizer_data.clear();
         break;
       }
       else {
         node = taxonomy.nodes()[node.parent_id];
       }
-    }
-    minimizer_data.minimizer.clear();
-  }   
+    }    
+  }
+
+  //minimizer_data.minimizer.clear();  
 
   if (call)
     stats.total_classified++;
