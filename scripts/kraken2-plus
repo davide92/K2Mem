@@ -11,7 +11,6 @@ use warnings;
 use Fcntl;
 use File::Basename;
 use Getopt::Long;
-use File::Copy;
 
 my $PROG = basename $0;
 my $KRAKEN2_DIR = '#####=KRAKEN2_DIR=#####';
@@ -92,13 +91,18 @@ if ($@) {
 }
 
 my $taxonomy = "$db_prefix/taxo.k2d";
+
 if (! -e "$db_prefix/hash_plus.k2d") {
-  copy("$db_prefix/hash.k2d", "$db_prefix/hash_plus.k2d");
+  system("cp", "$db_prefix/hash.k2d", "$db_prefix/hash_plus.k2d") == 0 or
+  die "$PROG: copy error: $!\n";
 }
 my $kht_file = "$db_prefix/hash_plus.k2d";
+
 if (! -e "$db_prefix/opts_plus.k2d") {
-  copy("$db_prefix/opts.k2d", "$db_prefix/opts_plus.k2d");
+  system("cp", "$db_prefix/opts.k2d", "$db_prefix/opts_plus.k2d") == 0 or
+  die "$PROG: copy error: $!\n";
 }
+
 my $opt_file = "$db_prefix/opts_plus.k2d";
 for my $file ($taxonomy, $kht_file, $opt_file) {
   if (! -e $file) {

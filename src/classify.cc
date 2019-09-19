@@ -57,8 +57,8 @@ struct ClassificationStats {
   uint64_t total_sequences; //number of reads
   uint64_t total_bases;
   uint64_t total_classified;
-  uint64_t total_assegned_g; //number of read assegned to rank genus
-  uint64_t total_assegned_s; //number of read assegned to rank species
+  uint64_t total_assegned_g; //number of reads assegned to rank genus
+  uint64_t total_assegned_s; //number of reads assegned to rank species
 };
 
 struct OutputStreamData {

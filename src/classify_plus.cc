@@ -57,8 +57,8 @@ struct ClassificationStats {
   uint64_t total_sequences; //number of reads
   uint64_t total_bases;
   uint64_t total_classified;
-  uint64_t total_assegned_g; //number of read assegned to rank genus
-  uint64_t total_assegned_s; //number of read assegned to rank species
+  uint64_t total_assegned_g; //number of reads assegned to rank genus
+  uint64_t total_assegned_s; //number of reads assegned to rank species
 };
 
 struct OutputStreamData {
@@ -80,10 +80,9 @@ struct OutputData {
   string unclassified_out2_str;
 };
 
-//structure for saving sequence classification result and minimizer not classified
-struct UnknownMinimizerData {
-  uint64_t minimizer;
-  uint64_t final_tax_id;  
+struct UnknownMinimizer {
+  vector<uint64_t> tax_id;
+  vector<vector<uint64_t>> unknown_minimizer;
 };
 
 void ParseCommandLine(int argc, char **argv, Options &opts);
@@ -91,12 +90,13 @@ void usage(int exit_code=EX_USAGE);
 void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
-    OutputStreamData &outputs, taxon_counts_t &call_counts);
+    OutputStreamData &outputs, taxon_counts_t &call_counts, 
+    UnknownMinimizer &unknown_minimizer_data);
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
-    KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
+    KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, vector<UnknownMinimizerData> &minimizer_data);
+    vector<string> &tx_frames, vector<uint64_t> &unknown_minimizer_seq);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -105,6 +105,9 @@ void ReportStats(struct timeval time1, struct timeval time2,
     ClassificationStats &stats);
 void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
+int FindTaxId(UnknownMinimizer &um, taxid_t tax_id);
+void AddUnknownMinimizer(UnknownMinimizer &um, vector<uint64_t> &minimizer, taxid_t tax_id);
+void MergeUnknownMinimizerData(UnknownMinimizer &um1, UnknownMinimizer &um2);
 
 
 int main(int argc, char **argv) {
@@ -142,12 +145,14 @@ int main(int argc, char **argv) {
 
   OutputStreamData outputs = { false, false, nullptr, nullptr, nullptr, nullptr, &std::cout };
 
+  UnknownMinimizer unknown_minimizer_data; //store all the unknown minimizers found
+
   struct timeval tv1, tv2;
   gettimeofday(&tv1, nullptr);
   if (optind == argc) {
     if (opts.paired_end_processing && ! opts.single_file_pairs)
       errx(EX_USAGE, "paired end processing used with no files specified");
-    ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts);
+    ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, unknown_minimizer_data);
   }
   else {
     for (int i = optind; i < argc; i++) {
@@ -155,15 +160,29 @@ int main(int argc, char **argv) {
         if (i + 1 == argc) {
           errx(EX_USAGE, "paired end processing used with unpaired file");
         }
-        ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts); //paired
+        ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, unknown_minimizer_data); //paired
         i += 1;
       }
       else {
-        ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts); //single
+        ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, unknown_minimizer_data); //single
       }
     }
   }
   gettimeofday(&tv2, nullptr);
+
+  //update minimizer-taxID hashmap
+  cout<<"Update minimizer-taxID hasmap." << endl;
+  for (size_t i = 0; i < unknown_minimizer_data.tax_id.size(); ++i) {
+    for (auto &minimizer : unknown_minimizer_data.unknown_minimizer[i]) {
+      hvalue_t existing_taxid = 0;
+      hvalue_t new_taxid = unknown_minimizer_data.tax_id[i];
+      while (! hash_ptr->CompareAndSet(minimizer, new_taxid, &existing_taxid)) {
+        new_taxid = taxonomy.LowestCommonAncestor(new_taxid, existing_taxid);
+      }
+    }
+  }
+  cout<<"Write hashmap in the DB file." << endl;
+  hash_ptr->WriteTable(opts.index_filename.c_str());
 
   delete hash_ptr;
 
@@ -179,10 +198,6 @@ int main(int argc, char **argv) {
           call_counts, stats.total_sequences, total_unclassified);
     }
   }
-
-  //save updated hash minimizer-taxid in file hash_plus.k2d
-  fprintf(stdout, "Write updated minimizer taxID map.\n");
-  hash_ptr->WriteTable(opts.index_filename.c_str());
 
   return 0;
 }
@@ -248,7 +263,8 @@ void ReportStats(struct timeval time1, struct timeval time2,
 void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
-    OutputStreamData &outputs, taxon_counts_t &call_counts)
+    OutputStreamData &outputs, taxon_counts_t &call_counts, 
+    UnknownMinimizer &unknown_minimizer_data)
 {
   std::istream *fptr1 = nullptr, *fptr2 = nullptr;
 
@@ -288,7 +304,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
     Sequence seq1, seq2;
     uint64_t block_id;
     OutputData out_data;
-    vector<UnknownMinimizerData> minimizer_data;
+    UnknownMinimizer unknown_minimizer_thread;
+    vector<uint64_t> unknown_minimizer_seq; 
 
     while (true) {
       thread_stats.total_sequences = 0;
@@ -296,10 +313,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_classified = 0;
       thread_stats.total_assegned_g = 0;
       thread_stats.total_assegned_s = 0;
-     
-      if(minimizer_data.size() != 0) {
-        minimizer_data.clear();
-      }
+
+      unknown_minimizer_seq.clear();      
 
       auto ok_read = false;
 
@@ -335,8 +350,10 @@ void ProcessFiles(const char *filename1, const char *filename2,
       c2_oss.str("");
       u1_oss.str("");
       u2_oss.str("");
+      
 
       while (true) {
+        unknown_minimizer_seq.clear();
         auto valid_fragment = reader1.NextSequence(seq1);
         if (opts.paired_end_processing && valid_fragment) {
           if (opts.single_file_pairs)
@@ -354,13 +371,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         auto call = ClassifySequence(seq1, seq2,
             kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-            taxa, hit_counts, translated_frames, minimizer_data);
+            taxa, hit_counts, translated_frames, unknown_minimizer_seq);
         if (call) {
           char buffer[1024] = "";
           sprintf(buffer, " kraken:taxid|%lu", tax.nodes()[call].external_id);
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
+          bool is_species = false;
           
           while(true) {
             if (IsGenus(tax, node)) {
@@ -369,6 +387,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
             }
             else if (IsSpecies(tax, node)) { 
               thread_stats.total_assegned_s++;
+              is_species = true;
               break;
             } else if (IsOther(tax, node)) {
               break;
@@ -377,8 +396,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
               node = tax.nodes()[node.parent_id];
             }
           }
-
           /* <--- end added part ---> */
+
+          if(is_species) {
+            cout << "Add unknown minimizer to the thread structure." << endl;
+            //add unknown_minimizer_seq to unknown_minimizer_thread
+            AddUnknownMinimizer(unknown_minimizer_thread, unknown_minimizer_seq, call);
+          }          
+          
           seq1.header += buffer;
           seq2.header += buffer;
           c1_oss << seq1.to_string();
@@ -394,30 +419,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
         thread_stats.total_bases += seq1.seq.size();
         if (opts.paired_end_processing)
           thread_stats.total_bases += seq2.seq.size();
-
-        //add minimizer to the hashmap
-        if (minimizer_data.size() != 0) {
-          #pragma omp critical(update_hash)
-          {  
-            hvalue_t existing_taxid = 0;
-            hvalue_t new_taxid = 0;    
-            /*for (std::vector<uint64_t>::iterator it = minimizer_data.minimizer.begin(); it != minimizer_data.minimizer.end(); ++it) {
-            result = hash->CompareAndSet(*it, new_taxid, &existing_taxid);
-            fprintf(stdout, "Result for the %lu minimizer is : %i\n", *it, result);
-            while (! hash.CompareAndSet(*minimizer_ptr, new_taxid, &existing_taxid)) { //collision handler
-              new_taxid = tax.LowestCommonAncestor(new_taxid, existing_taxid);
-            }*/
-            for (auto &md : minimizer_data) {
-              existing_taxid = 0;
-              new_taxid = md.final_tax_id;
-              /*result = hash->CompareAndSet(minimizer, new_taxid, &existing_taxid);
-              fprintf(stdout, "Result for the %lu minimizer is : %i\n", minimizer, result);*/
-              while (! hash->CompareAndSet(md.minimizer, new_taxid, &existing_taxid)) { //collision handler
-                new_taxid = tax.LowestCommonAncestor(new_taxid, existing_taxid);
-              }
-            }
-          }
-        }
       }
 
       #pragma omp atomic
@@ -461,6 +462,13 @@ void ProcessFiles(const char *filename1, const char *filename2,
         output_queue.push(out_data);
       }
 
+      //add update unknown_minimizer_data
+      #pragma omp critical(update_minimizer_data) 
+      {
+        cout << "Add unknown minimizer to global structure." << endl;
+        MergeUnknownMinimizerData(unknown_minimizer_data, unknown_minimizer_thread);
+      }
+
       bool output_loop = true;
       while (output_loop) {
         #pragma omp critical(output_queue)
@@ -498,6 +506,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     }  // end while
   }  // end parallel block
   omp_destroy_lock(&output_lock);
+
   if (fptr1 != nullptr)
     delete fptr1;
   if (fptr2 != nullptr)
@@ -581,7 +590,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, vector<UnknownMinimizerData> &minimizer_data)
+    vector<string> &tx_frames, vector<uint64_t> &unknown_minimizer_seq)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -608,7 +617,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       taxid_t last_taxon = TAXID_MAX;
       bool ambig_flag = false;
       while ((minimizer_ptr = scanner.NextMinimizer(&ambig_flag)) != nullptr) {
-        UnknownMinimizerData umd = {0, 0};
         taxid_t taxon;
         if (ambig_flag) {
           taxon = AMBIGUOUS_SPAN_TAXON;
@@ -625,12 +633,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               taxon = hash->Get(*minimizer_ptr);
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
-            if (taxon == 0) { //minimizer not present in the database
-              fprintf(stdout, "Minimizer %lu not present in the DB.\n", *minimizer_ptr);
-              //minimizer_data.minimizer.push_back(*minimizer_ptr);
-              umd.minimizer = *minimizer_ptr;
-              umd.final_tax_id = 0;
-              minimizer_data.push_back(umd); 
+            
+            if(! taxon) {//minimizer not in the kraken2 DB
+              cout << "Unknown minimizer found." << endl;
+              unknown_minimizer_seq.push_back(*minimizer_ptr);
             }
           }
           else {
@@ -660,31 +666,8 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     total_kmers--;  // account for the mate pair marker
   if (opts.use_translated_search)  // account for reading frame markers
     total_kmers -= opts.paired_end_processing ? 4 : 2;
-  if (! opts.quick_mode)  {
+  if (! opts.quick_mode)
     call = ResolveTree(hit_counts, taxonomy, total_kmers, opts);
-
-    fprintf(stdout, "Number of not classified minimizer: %lu.\n", 
-          minimizer_data.size());
-
-    TaxonomyNode node = taxonomy.nodes()[call];
-    while(true) {
-      if(IsSpecies(taxonomy, node)) {  
-        for (uint64_t i = 0; i < minimizer_data.size(); ++i) {
-          minimizer_data[i].final_tax_id = call;
-        }      
-        break; 
-      }
-      else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
-        minimizer_data.clear();
-        break;
-      }
-      else {
-        node = taxonomy.nodes()[node.parent_id];
-      }
-    }    
-  }
-
-  //minimizer_data.minimizer.clear();  
 
   if (call)
     stats.total_classified++;
@@ -837,6 +820,40 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
   }
 }
 
+int FindTaxId(UnknownMinimizer &um, taxid_t tax_id){
+  int pos = -1;
+
+  for (size_t i = 0; i < um.tax_id.size(); ++i) {
+    if (um.tax_id[i] == tax_id) {
+      pos = i;
+      break;
+    }
+  }
+
+  return pos;  
+}
+
+void AddUnknownMinimizer(UnknownMinimizer &um, vector<uint64_t> &minimizer, taxid_t tax_id) {
+  int pos = FindTaxId(um, tax_id);
+
+  if (pos == -1) {
+    vector<uint64_t> row(minimizer.size());
+    copy(minimizer.begin(), minimizer.end(), row.begin());
+    um.unknown_minimizer.push_back(row);
+    um.tax_id.push_back(tax_id);
+  } else {
+    um.unknown_minimizer[pos].insert(um.unknown_minimizer[pos].end(), minimizer.begin(), minimizer.end());
+  }
+}
+
+void MergeUnknownMinimizerData(UnknownMinimizer &um1, UnknownMinimizer &um2) {
+
+  for (size_t i = 0; i < um2.tax_id.size(); ++i) {
+    AddUnknownMinimizer(um1, um2.unknown_minimizer[i], um2.tax_id[i]);
+  }
+
+}
+
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
@@ -880,22 +897,18 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
         break;
       case 'R' :
         opts.report_filename = optarg;
-        opts.report_filename.insert(opts.report_filename.length(), "_plus");
         break;
       case 'z' :
         opts.report_zero_counts = true;
         break;
       case 'C' :
         opts.classified_output_filename = optarg;
-        opts.classified_output_filename.insert(opts.classified_output_filename.length(), "_plus");
         break;
       case 'U' :
         opts.unclassified_output_filename = optarg;
-        opts.unclassified_output_filename.insert(opts.unclassified_output_filename.length(), "_plus");
         break;
       case 'O' :
         opts.kraken_output_filename = optarg;
-        opts.kraken_output_filename.insert(opts.kraken_output_filename.length(), "_plus");
         break;
       case 'n' :
         opts.print_scientific_name = true;
