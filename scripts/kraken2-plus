@@ -22,7 +22,7 @@ if (! -e "$KRAKEN2_DIR/classify_plus") {
 }
 
 # Test to see if the executables got moved, try to recover if we can
-if (! -e "$KRAKEN2_DIR/classify") {
+if (! -e "$KRAKEN2_DIR/classify_add") {
   use Cwd 'abs_path';
   $KRAKEN2_DIR = dirname abs_path($0);
 }
@@ -32,7 +32,7 @@ $ENV{"KRAKEN2_DIR"} = $KRAKEN2_DIR;
 $ENV{"PATH"} = "$KRAKEN2_DIR:$ENV{PATH}";
 
 my $CLASSIFY_PLUS = "$KRAKEN2_DIR/classify_plus";
-my $CLASSIFY = "$KRAKEN2_DIR/classify";
+my $CLASSIFY = "$KRAKEN2_DIR/classify_add";
 my $GZIP_MAGIC = chr(hex "1f") . chr(hex "8b");
 my $BZIP2_MAGIC = "BZ";
 
@@ -54,6 +54,7 @@ my $minimum_base_quality = 0;
 my $report_filename;
 my $use_mpa_style = 0;
 my $report_zero_counts = 0;
+my $enable_classification = 0;
 
 GetOptions(
   "help" => \&display_help,
@@ -75,6 +76,7 @@ GetOptions(
   "report=s" => \$report_filename,
   "use-mpa-style" => \$use_mpa_style,
   "report-zero-counts" => \$report_zero_counts,
+  "enable-classification" => \$enable_classification,
 );
 
 if (! defined $threads) {
@@ -91,23 +93,28 @@ if ($@) {
 }
 
 my $taxonomy = "$db_prefix/taxo.k2d";
-
-if (! -e "$db_prefix/hash_plus.k2d") {
-  system("cp", "$db_prefix/hash.k2d", "$db_prefix/hash_plus.k2d") == 0 or
-  die "$PROG: copy error: $!\n";
-}
-my $kht_file = "$db_prefix/hash_plus.k2d";
-
-if (! -e "$db_prefix/opts_plus.k2d") {
-  system("cp", "$db_prefix/opts.k2d", "$db_prefix/opts_plus.k2d") == 0 or
-  die "$PROG: copy error: $!\n";
-}
-
-my $opt_file = "$db_prefix/opts_plus.k2d";
+my $kht_file = "$db_prefix/hash.k2d";
+my $opt_file = "$db_prefix/opts.k2d";
 for my $file ($taxonomy, $kht_file, $opt_file) {
   if (! -e $file) {
     die "$PROG: $file does not exist!\n";
   }
+}
+
+my $lfh;
+my $hash_plus = "$db_prefix/add_hash.k2d";
+my $opts_plus = "$db_prefix/add_opt.k2d";
+#Create new files if not exist
+if (! -e $hash_plus) {  
+	open($lfh, '>', $hash_plus) or
+	die "Unable to open file $hash_plus : $!";
+	close($lfh) or die "Unable to close file : $hash_plus $!";
+}
+
+if (! -e $opts_plus) {
+	open($lfh, '>', $opts_plus) or
+	die "Unable to open file $opts_plus : $!";
+	close($lfh) or die "Unable to close file : $opts_plus $!";
 }
 
 if ($paired && ((@ARGV % 2) != 0 || @ARGV == 0)) {
@@ -134,8 +141,10 @@ if ($auto_detect) {
 # set flags for classifier
 my @flags;
 push @flags, "-H", $kht_file;
+push @flags, "-A", $hash_plus;
 push @flags, "-t", $taxonomy;
 push @flags, "-o", $opt_file;
+push @flags, "-a", $opts_plus;
 push @flags, "-p", $threads;
 push @flags, "-q" if $quick;
 push @flags, "-P" if $paired;
@@ -185,9 +194,11 @@ if ($compressed) {
 exec $CLASSIFY_PLUS, @flags, @ARGV;
 die "$PROG: exec error: $!\n";
 
+if($enable_classification) {
+  exec $CLASSIFY, @flags, @ARGV;
+  die "$PROG: exec error: $!\n";
+}
 
-#exec $CLASSIFY, @flags, @ARGV;
-#die "$PROG: exec error: $!\n";
 
 sub usage {
   my $exit_code = @_ ? shift : 64;
@@ -223,6 +234,7 @@ Options:
   --use-names             Print scientific names instead of just taxids
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
+  --classify              Enable classsificatin with the additional hashmap
   --help                  Print this message
   --version               Print version information
 

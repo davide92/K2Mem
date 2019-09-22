@@ -132,7 +132,6 @@ int main(int argc, char **argv) {
 
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
-  //CompactHashTable *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
 
   cerr << " done." << endl;
 
@@ -170,11 +169,7 @@ int main(int argc, char **argv) {
   }
   gettimeofday(&tv2, nullptr);
 
-  cout<<"Write update of the additinal hashmap in the file." << endl;
-  add_map->WriteHashMap(opts.add_map_filename.c_str(), opts.add_opts_filename.c_str());
-
   delete hash_ptr;
-  delete add_map;
 
   ReportStats(tv1, tv2, stats);
 
@@ -215,9 +210,9 @@ void ReportStats(struct timeval time1, struct timeval time2,
 
   double recall_s = 1.0 * stats.total_assegned_s / stats.total_sequences;
 
-  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? ((2.0 * precision_g * recall_g) / (precision_g + recall_g)) * 100.0 : -1.0;
+  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? (2.0 * precision_g * recall_g) / (precision_g + recall_g) : -1.0;
   
-  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? ((2.0 * precision_s * recall_s) / (precision_s + recall_s)) * 100.0 : -1.0;
+  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? (2.0 * precision_s * recall_s) / (precision_s + recall_s) : -1.0;
 
   if (isatty(fileno(stderr)))
     cerr << "\r";
@@ -240,13 +235,13 @@ void ReportStats(struct timeval time1, struct timeval time2,
           (unsigned long long) stats.total_assegned_g);
   fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
   fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
-  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g);
+  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g * 100.0);
   fprintf(stderr, "SPECIES LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at species level.\n", 
           (unsigned long long) stats.total_assegned_s);
   fprintf(stderr, "  precision at species level: %.2f%%.\n", precision_s * 100.0);
   fprintf(stderr, "  recall at species level: %.2f%%.\n", recall_s * 100.0);
-  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s);
+  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s * 100.0);
   
 }
 
@@ -293,14 +288,14 @@ void ProcessFiles(const char *filename1, const char *filename2,
     BatchSequenceReader reader1, reader2;
     Sequence seq1, seq2;
     uint64_t block_id;
-    OutputData out_data; 
+    OutputData out_data;
 
     while (true) {
       thread_stats.total_sequences = 0;
       thread_stats.total_bases = 0;
       thread_stats.total_classified = 0;
       thread_stats.total_assegned_g = 0;
-      thread_stats.total_assegned_s = 0;    
+      thread_stats.total_assegned_s = 0;
 
       auto ok_read = false;
 
@@ -336,7 +331,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
       c2_oss.str("");
       u1_oss.str("");
       u2_oss.str("");
-      
 
       while (true) {
         auto valid_fragment = reader1.NextSequence(seq1);
@@ -363,7 +357,25 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          
+          /*string rank;
+          while(true) {
+            rank = tax.rank_data() + node.rank_offset;
+            if (rank == "genus") {
+                thread_stats.total_assegned_g++;
+                break;
+            }
+            else if (rank == "species") { 
+              thread_stats.total_assegned_s++;
+              break;
+            } else if (rank == "root" || rank == "superkingdom" || rank == "kingdom" || rank == "phylum"
+                      || rank == "class" || rank == "order" || rank == "family") {
+              break;
+            }
+            else {
+              node = tax.nodes()[node.parent_id];
+            }
+          }*/
+
           while(true) {
             if (IsGenus(tax, node)) {
                 thread_stats.total_assegned_g++;
@@ -379,8 +391,9 @@ void ProcessFiles(const char *filename1, const char *filename2,
               node = tax.nodes()[node.parent_id];
             }
           }
-          /* <--- end added part ---> */       
-          
+
+          /* <--- end added part ---> */
+          /* <--- end added part ---> */
           seq1.header += buffer;
           seq2.header += buffer;
           c1_oss << seq1.to_string();
@@ -476,7 +489,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
     }  // end while
   }  // end parallel block
   omp_destroy_lock(&output_lock);
-
   if (fptr1 != nullptr)
     delete fptr1;
   if (fptr2 != nullptr)
@@ -567,7 +579,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   taxa.clear();
   hit_counts.clear();
   auto frame_ct = opts.use_translated_search ? 6 : 1;
-  vector<uint64_t> unknown_minimizer_seq;
 
   for (int mate_num = 0; mate_num < 2; mate_num++) {
     if (mate_num == 1 && ! opts.paired_end_processing)
@@ -587,7 +598,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
       uint64_t last_minimizer = UINT64_MAX;
       taxid_t last_taxon = TAXID_MAX;
       bool ambig_flag = false;
-      unknown_minimizer_seq.clear();
       while ((minimizer_ptr = scanner.NextMinimizer(&ambig_flag)) != nullptr) {
         taxid_t taxon;
         if (ambig_flag) {
@@ -605,17 +615,12 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
               taxon = hash->Get(*minimizer_ptr);
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
-            
+
             if(! taxon && ! add_map->IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
                taxon = add_map->GetTax(*minimizer_ptr);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
-
-            if(! taxon) {//minimizer not in the kraken2 DB and not in the additional hashmap
-              cout << "Unknown minimizer (" << *minimizer_ptr << ") found." << endl;
-              unknown_minimizer_seq.push_back(*minimizer_ptr);
-            }
           }
           else {
             taxon = last_taxon;
@@ -688,33 +693,6 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   }
 
   koss << endl;
-
-  if (call) {
-    auto node = taxonomy.nodes()[call];
-    bool is_species = false;
-          
-    while(true) {
-      if (IsSpecies(taxonomy, node)) {
-        is_species = true;
-        break;
-      } else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
-        break;
-      }
-      else {
-        node = taxonomy.nodes()[node.parent_id];
-      }
-    }
-
-    if (is_species) {
-      cout << "Add minimizers found in the additional hashmap." << endl;
-      for (auto minimizer : unknown_minimizer_seq) {
-        #pragma omp critical(add_minimizers)
-        {
-            add_map->AddPair(minimizer, call, taxonomy);
-        }
-      }
-    }
-  }
 
   return call;
 }
@@ -824,7 +802,6 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
       dna.seq[i] = 'x';
   }
 }
-
 
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;

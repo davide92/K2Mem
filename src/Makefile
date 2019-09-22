@@ -4,7 +4,7 @@ CXXFLAGS += -DLINEAR_PROBING
 
 .PHONY: all clean install
 
-PROGS = estimate_capacity build_db classify classify_plus dump_table lookup_accession_numbers
+PROGS = estimate_capacity build_db classify classify_plus classify_add dump_table lookup_accession_numbers
 
 all: $(PROGS)
 
@@ -17,6 +17,7 @@ clean:
 taxonomy.o: taxonomy.cc taxonomy.h mmap_file.h
 mmap_file.o: mmap_file.cc mmap_file.h
 compact_hash.o: compact_hash.cc compact_hash.h kv_store.h mmap_file.h
+additional_map.o: additional_map.cc additional_map.h taxonomy.h
 mmscanner.o: mmscanner.cc mmscanner.h
 seqreader.o: seqreader.cc seqreader.h
 omp_hack.o: omp_hack.cc omp_hack.h
@@ -28,7 +29,9 @@ build_db: build_db.cc mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanne
 
 classify: classify.cc reports.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
 
-classify_plus: classify_plus.cc reports.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
+classify_plus: classify_plus.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
+
+classify_add: classify_add.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
 
 estimate_capacity: estimate_capacity.cc seqreader.o mmscanner.o omp_hack.o utilities.o
 
