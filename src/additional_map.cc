@@ -18,66 +18,9 @@ namespace kraken2 {
 	
 	void AdditionalHashMap::ReadFile(const char *filename) {
 
-		/*ifstream ifs(filename, ifstream::binary);
-
-		if (ifs) {
-			if (!is_empty(ifs)){
-			ifs.read((char *) &total_size, sizeof(total_size));
-
-			vector<uint64_t> key(total_size);
-			vector<taxid_t> value(total_size);
-
-			ifs.read((char *) key.data(), total_size * sizeof(key.data()));
-	    	if (! ifs) {
-	      		errx(EX_OSERR, "Error reading key in additional hash table");
-	    	}
-
-	    	ifs.read((char *) value.data(), total_size * sizeof(value.data()));
-	    	if (! ifs) {
-	      		errx(EX_OSERR, "Error reading key in additional hash table");
-	    	}
-
-	    	ifs.close();
-
-	    	for (size_t i = 0; i != total_size; ++i) {
-	    		ump.insert(make_pair(key[i], value[i]));
-	    	}
-
-	    	key.clear();
-	    	value.clear();
-
-			} else {
-				ifs.close();
-			}
-		}*/
-
-		/*fstream ifile(filename);
-
-	    if(ifile.is_open() && !is_empty(ifile)) {
-	    	cout << "parse additional map file." << endl;
-
-	    	std::unordered_map<uint64_t, taxid_t> tmp_ump;
-
-	    	while (!ifile.eof()) {
-	    		string line;
-	    		uint64_t key;
-    			taxid_t value;
-
-	    		getline(ifile, line);
-	    		istringstream linestream(line);    		
-	    		linestream >> key >> value;
-
-    			tmp_ump.emplace(key, value);    		
-	    	}
-
-		    ifile.close();
-		    ump(tmp_ump);
-	    }*/
-
 	    ifstream ifile(filename);
 
 	    if(ifile.is_open() && !is_empty(ifile)) {
-	    	cout << "parse additional map file." << endl;
 
 	    	while (!ifile.eof()) {
 	    		string line;
@@ -136,32 +79,6 @@ namespace kraken2 {
 	
 	void AdditionalHashMap::WriteHashMap(const char *filename) {
 		
-		/*if (ump.GetSize()) {
-			vector<uint64_t> key(total_size);
-	  		vector<taxid_t> value(total_size);
-
-	  		size_t i = 0;
-	   		for (auto element : ump) {
-	  			key[i] = element.first;
-	  			value[i] = element.second;
-	  			++i;
-	  		}
-
-			ofstream ofs(filename, ofstream::binary);
-			ofs.write((char *) &total_size, sizeof(total_size));
-
-	  		ofs.write((char *) key.data(), total_size * sizeof(key.data()));
-	  		ofs.flush();
-	  		ofs.write((char *) value.data(), total_size * sizeof(value.data()));		
-	  		
-	  		ofs.close();
-
-	  		key.clear();
-		    value.clear();
-		}
-  		
-	}*/
-
 		if (GetSize()) {
 			ofstream ofile(filename);
 	    	if (ofile.is_open()) {

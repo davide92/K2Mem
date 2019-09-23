@@ -177,7 +177,6 @@ int main(int argc, char **argv) {
   }
   gettimeofday(&tv2, nullptr);
 
-  cout<<"Write update of the additinal hashmap in the file." << endl;
   add_map.WriteHashMap(opts.add_map_filename.c_str());
 
   delete hash_ptr;
