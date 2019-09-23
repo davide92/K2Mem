@@ -11,6 +11,7 @@ use warnings;
 use Fcntl;
 use File::Basename;
 use Getopt::Long;
+use Time::HiRes qw( time );
 
 my $PROG = basename $0;
 my $KRAKEN2_DIR = '#####=KRAKEN2_DIR=#####';
@@ -55,6 +56,7 @@ my $report_filename;
 my $use_mpa_style = 0;
 my $report_zero_counts = 0;
 my $enable_classification = 0;
+my $disable_add_map = 0;
 
 GetOptions(
   "help" => \&display_help,
@@ -77,6 +79,7 @@ GetOptions(
   "use-mpa-style" => \$use_mpa_style,
   "report-zero-counts" => \$report_zero_counts,
   "enable-classification" => \$enable_classification,
+  "disable-additional-map" => \$disable_add_map,
 );
 
 if (! defined $threads) {
@@ -103,18 +106,12 @@ for my $file ($taxonomy, $kht_file, $opt_file) {
 
 my $lfh;
 my $hash_plus = "$db_prefix/add_hash.k2d";
-my $opts_plus = "$db_prefix/add_opt.k2d";
 #Create new files if not exist
 if (! -e $hash_plus) {  
 	open($lfh, '>', $hash_plus) or
-	die "Unable to open file $hash_plus : $!";
-	close($lfh) or die "Unable to close file : $hash_plus $!";
-}
-
-if (! -e $opts_plus) {
-	open($lfh, '>', $opts_plus) or
-	die "Unable to open file $opts_plus : $!";
-	close($lfh) or die "Unable to close file : $opts_plus $!";
+	 die "Unable to open file $hash_plus : $!";
+	close($lfh) or 
+    die "Unable to close file : $hash_plus $!";
 }
 
 if ($paired && ((@ARGV % 2) != 0 || @ARGV == 0)) {
@@ -144,7 +141,6 @@ push @flags, "-H", $kht_file;
 push @flags, "-A", $hash_plus;
 push @flags, "-t", $taxonomy;
 push @flags, "-o", $opt_file;
-push @flags, "-a", $opts_plus;
 push @flags, "-p", $threads;
 push @flags, "-q" if $quick;
 push @flags, "-P" if $paired;
@@ -158,6 +154,7 @@ push @flags, "-R", $report_filename if defined $report_filename;
 push @flags, "-m" if $use_mpa_style;
 push @flags, "-z" if $report_zero_counts;
 push @flags, "-M" if $memory_mapping;
+push @flags, "-c" if $enable_classification;
 
 # Stupid hack to keep filehandles from closing before exec
 # filehandles opened inside for loop below go out of scope
@@ -191,12 +188,26 @@ if ($compressed) {
   @ARGV = @replacement_ARGV;
 }
 
-exec $CLASSIFY_PLUS, @flags, @ARGV;
-die "$PROG: exec error: $!\n";
+#exec $CLASSIFY_PLUS, @flags, @ARGV;
+#die "$PROG: exec error: $!\n";
+
+if(! $disable_add_map) {
+  my $start = time();
+  system($CLASSIFY_PLUS, @flags, @ARGV) == 0
+    or die "system failed to execute classify_plus: $?";
+  my $end = time();
+
+  print STDOUT sprintf("Execution time to classify and create the additional map: %0.02f s\n", $end - $start);
+}
+
 
 if($enable_classification) {
-  exec $CLASSIFY, @flags, @ARGV;
-  die "$PROG: exec error: $!\n";
+  my $start = time();
+  system($CLASSIFY, @flags, @ARGV) == 0
+    or die "system failed to execute classify_add: $?";
+  my $end = time();
+
+  print STDOUT sprintf("Execution time to classify with the additional map: %0.02f s\n", $end - $start);
 }
 
 
@@ -234,7 +245,10 @@ Options:
   --use-names             Print scientific names instead of just taxids
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
-  --classify              Enable classsificatin with the additional hashmap
+  --disable-additional-map  
+                          Disable the build of the additional hashmap
+  --enable-classification              
+                          Enable classsificatin with the additional hashmap
   --help                  Print this message
   --version               Print version information
 

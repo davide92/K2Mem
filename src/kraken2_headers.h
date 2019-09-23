@@ -27,6 +27,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "omp_hack.h"
 
 #ifndef SIZE_MAX

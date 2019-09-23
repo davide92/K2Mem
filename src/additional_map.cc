@@ -1,10 +1,13 @@
 #include "additional_map.h"
 
+using std::cout;
+using std::endl;
 using std::string;
 using std::ifstream;
 using std::ofstream;
+using std::getline;
+using std::istringstream;
 using std::unordered_map;
-using std::make_pair;
 using std::vector;
 
 namespace kraken2 {
@@ -12,34 +15,26 @@ namespace kraken2 {
 	bool is_empty(std::ifstream& pFile) {
     	return pFile.peek() == ifstream::traits_type::eof();
 	}
-
-	AdditionalHashMap::AdditionalHashMap(const std::string &filename, const std::string &add_opts_filename) {
-		AdditionalHashMap(filename.c_str(), add_opts_filename.c_str());
-	}
 	
-	AdditionalHashMap::AdditionalHashMap(const char *filename, const char *add_opts_filename) {
+	void AdditionalHashMap::ReadFile(const char *filename) {
 
-		//get the size of the hashmap
-		ifstream ifs_opts(add_opts_filename);
-		if (!is_empty(ifs_opts)){
-			ifs_opts.read((char *) &total_size, sizeof(total_size));
-		}
-		ifs_opts.close();
+		/*ifstream ifs(filename, ifstream::binary);
 
+		if (ifs) {
+			if (!is_empty(ifs)){
+			ifs.read((char *) &total_size, sizeof(total_size));
 
-		ifstream ifs(filename);
-		if (!is_empty(ifs)){
-			uint64_t key[total_size];			
-			taxid_t value[total_size];
+			vector<uint64_t> key(total_size);
+			vector<taxid_t> value(total_size);
 
-			ifs.read((char *) &key, total_size * sizeof(uint64_t));
+			ifs.read((char *) key.data(), total_size * sizeof(key.data()));
 	    	if (! ifs) {
 	      		errx(EX_OSERR, "Error reading key in additional hash table");
 	    	}
 
-	    	ifs.read((char *) &value, total_size * sizeof(taxid_t));
+	    	ifs.read((char *) value.data(), total_size * sizeof(value.data()));
 	    	if (! ifs) {
-	      		errx(EX_OSERR, "Error reading value in additional hash table");
+	      		errx(EX_OSERR, "Error reading key in additional hash table");
 	    	}
 
 	    	ifs.close();
@@ -48,11 +43,57 @@ namespace kraken2 {
 	    		ump.insert(make_pair(key[i], value[i]));
 	    	}
 
-			total_size = ump.size();
-		} else {
-			ifs.close();
-		}
+	    	key.clear();
+	    	value.clear();
 
+			} else {
+				ifs.close();
+			}
+		}*/
+
+		/*fstream ifile(filename);
+
+	    if(ifile.is_open() && !is_empty(ifile)) {
+	    	cout << "parse additional map file." << endl;
+
+	    	std::unordered_map<uint64_t, taxid_t> tmp_ump;
+
+	    	while (!ifile.eof()) {
+	    		string line;
+	    		uint64_t key;
+    			taxid_t value;
+
+	    		getline(ifile, line);
+	    		istringstream linestream(line);    		
+	    		linestream >> key >> value;
+
+    			tmp_ump.emplace(key, value);    		
+	    	}
+
+		    ifile.close();
+		    ump(tmp_ump);
+	    }*/
+
+	    ifstream ifile(filename);
+
+	    if(ifile.is_open() && !is_empty(ifile)) {
+	    	cout << "parse additional map file." << endl;
+
+	    	while (!ifile.eof()) {
+	    		string line;
+	    		uint64_t key;
+    			taxid_t value;
+
+	    		getline(ifile, line);
+	    		istringstream linestream(line);    		
+	    		linestream >> key >> value;
+
+    			Add(key, value);    		
+	    	}
+
+		    ifile.close();
+	    } 
+		
 	}
 
 	void AdditionalHashMap::AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy) {
@@ -64,8 +105,11 @@ namespace kraken2 {
 			new_tax = taxonomy.LowestCommonAncestor(new_tax, old_tax);
 		}
 
-		ump.insert(make_pair(minimizer, new_tax));
-		total_size = ump.size();
+		ump.emplace(minimizer, new_tax);
+	}
+
+	void AdditionalHashMap::Add(uint64_t minimizer, taxid_t tax_id) {
+		ump.emplace(minimizer, tax_id);
 	}
 	
 	taxid_t AdditionalHashMap::GetTax(uint64_t minimizer) {
@@ -76,9 +120,13 @@ namespace kraken2 {
 		}
 		
 		return tax;
-	}
+	}	
 	
 	size_t AdditionalHashMap::GetSize() {
+		/*if ( ump.size() != total_size) {
+			total_size = ump.size();
+		}
+		return total_size;*/
 		return ump.size();
 	}
 
@@ -86,25 +134,45 @@ namespace kraken2 {
 		return ump.size() == 0;
 	}
 	
-	void AdditionalHashMap::WriteHashMap(const char *filename, const char *add_opts_filename) {
-		//save the size of the hashmap
-		ofstream ofs_opts(add_opts_filename, ofstream::binary);
-  		ofs_opts.write((char *) &total_size, sizeof(total_size));
-  		ofs_opts.close();
+	void AdditionalHashMap::WriteHashMap(const char *filename) {
+		
+		/*if (ump.GetSize()) {
+			vector<uint64_t> key(total_size);
+	  		vector<taxid_t> value(total_size);
 
+	  		size_t i = 0;
+	   		for (auto element : ump) {
+	  			key[i] = element.first;
+	  			value[i] = element.second;
+	  			++i;
+	  		}
 
-  		//save hashmap
-  		vector<uint64_t> key;
-  		vector<taxid_t> value;
+			ofstream ofs(filename, ofstream::binary);
+			ofs.write((char *) &total_size, sizeof(total_size));
 
-   		for (auto element : ump) {
-  			key.push_back(element.first);
-  			value.push_back(element.second);
-  		}
+	  		ofs.write((char *) key.data(), total_size * sizeof(key.data()));
+	  		ofs.flush();
+	  		ofs.write((char *) value.data(), total_size * sizeof(value.data()));		
+	  		
+	  		ofs.close();
 
-  		ofstream ofs(filename, ofstream::binary);
-  		ofs.write((char *) key.data(), sizeof(uint64_t) * total_size);
-  		ofs.write((char *) value.data(), sizeof(taxid_t) * total_size);
-  		ofs.close();
+	  		key.clear();
+		    value.clear();
+		}
+  		
+	}*/
+
+		if (GetSize()) {
+			ofstream ofile(filename);
+	    	if (ofile.is_open()) {
+				for (auto x: ump)  {
+			        ofile << x.first << "\t" << x.second;
+			        ofile << "\n";
+			    }
+	    	}
+
+			ofile.close();
+	  		
+		}
 	}
 }

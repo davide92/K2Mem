@@ -42,7 +42,6 @@ struct Options {
   string unclassified_output_filename;
   string kraken_output_filename;
   string add_map_filename;
-  string add_opts_filename;
   bool mpa_style_report;
   bool quick_mode;
   bool report_zero_counts;
@@ -54,6 +53,7 @@ struct Options {
   bool single_file_pairs;
   int minimum_quality_score;
   bool use_memory_mapping;
+  bool classification;
 };
 
 struct ClassificationStats {
@@ -89,12 +89,12 @@ void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts, 
-    AdditionalHashMap *add_map);
+    AdditionalHashMap &add_map);
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, AdditionalHashMap *add_map);
+    vector<string> &tx_frames, AdditionalHashMap &add_map);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -118,10 +118,16 @@ int main(int argc, char **argv) {
   opts.print_scientific_name = false;
   opts.minimum_quality_score = 0;
   opts.use_memory_mapping = false;
+  opts.classification = false;
 
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
+
+  opts.report_filename.append("_1");   
+  opts.classified_output_filename.append("_1");
+  opts.unclassified_output_filename.append("_1");
+  opts.kraken_output_filename.append("_1");
 
   cerr << "Loading database information...";
 
@@ -138,7 +144,8 @@ int main(int argc, char **argv) {
 
   cerr << "Loading additional hashmap...";
 
-  AdditionalHashMap *add_map = new AdditionalHashMap(opts.add_map_filename, opts.add_opts_filename);
+  AdditionalHashMap add_map;
+  add_map.ReadFile(opts.add_map_filename.c_str());
 
   cerr << " done." <<endl;
 
@@ -171,21 +178,22 @@ int main(int argc, char **argv) {
   gettimeofday(&tv2, nullptr);
 
   cout<<"Write update of the additinal hashmap in the file." << endl;
-  add_map->WriteHashMap(opts.add_map_filename.c_str(), opts.add_opts_filename.c_str());
+  add_map.WriteHashMap(opts.add_map_filename.c_str());
 
   delete hash_ptr;
-  delete add_map;
 
-  ReportStats(tv1, tv2, stats);
+  if (!opts.classification)  {
+    ReportStats(tv1, tv2, stats);
 
-  if (! opts.report_filename.empty()) {
-    if (opts.mpa_style_report)
-      ReportMpaStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
-          call_counts);
-    else {
-      auto total_unclassified = stats.total_sequences - stats.total_classified;
-      ReportKrakenStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
-          call_counts, stats.total_sequences, total_unclassified);
+    if (! opts.report_filename.empty()) {
+      if (opts.mpa_style_report)
+        ReportMpaStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
+            call_counts);
+      else {
+        auto total_unclassified = stats.total_sequences - stats.total_classified;
+        ReportKrakenStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
+            call_counts, stats.total_sequences, total_unclassified);
+      }
     }
   }
 
@@ -254,7 +262,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts, 
-    AdditionalHashMap *add_map)
+    AdditionalHashMap &add_map)
 {
   std::istream *fptr1 = nullptr, *fptr2 = nullptr;
 
@@ -363,17 +371,17 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          
-          while(true) {
+          bool found = false;
+          while(!found) {
             if (IsGenus(tax, node)) {
                 thread_stats.total_assegned_g++;
-                break;
+                found = true;
             }
             else if (IsSpecies(tax, node)) { 
               thread_stats.total_assegned_s++;
-              break;
+              found = true;
             } else if (IsOther(tax, node)) {
-              break;
+              found = true;
             }
             else {
               node = tax.nodes()[node.parent_id];
@@ -411,7 +419,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
       #pragma omp critical(output_stats)
       {
-        if (isatty(fileno(stderr)))
+        if (isatty(fileno(stderr)) && !opts.classification)
           cerr << "\rProcessed " << stats.total_sequences
                << " sequences (" << stats.total_bases << " bp) ...";
       }
@@ -491,6 +499,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     (*outputs.unclassified_output1) << std::flush;
   if (outputs.unclassified_output2 != nullptr)
     (*outputs.unclassified_output2) << std::flush;
+  
 }
 
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -560,7 +569,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, AdditionalHashMap *add_map)
+    vector<string> &tx_frames, AdditionalHashMap &add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -606,14 +615,13 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
             
-            if(! taxon && ! add_map->IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
-               taxon = add_map->GetTax(*minimizer_ptr);
+            if(! taxon && ! add_map.IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
+               taxon = add_map.GetTax(*minimizer_ptr);
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
 
             if(! taxon) {//minimizer not in the kraken2 DB and not in the additional hashmap
-              cout << "Unknown minimizer (" << *minimizer_ptr << ") found." << endl;
               unknown_minimizer_seq.push_back(*minimizer_ptr);
             }
           }
@@ -650,55 +658,58 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
   if (call)
     stats.total_classified++;
 
-  if (call)
-    koss << "C\t";
-  else
-    koss << "U\t";
-  if (! opts.paired_end_processing)
-    koss << dna.id << "\t";
-  else
-    koss << TrimPairInfo(dna.id) << "\t";
-
-  auto ext_call = taxonomy.nodes()[call].external_id;
-  if (opts.print_scientific_name) {
-    const char *name = nullptr;
-    if (call) {
-      name = taxonomy.name_data() + taxonomy.nodes()[call].name_offset;
-    }
-    koss << (name ? name : "unclassified") << " (taxid " << ext_call << ")";
-  }
-  else {
-    koss << ext_call;
-  }
-
-  koss << "\t";
-  if (! opts.paired_end_processing)
-    koss << dna.seq.size() << "\t";
-  else
-    koss << dna.seq.size() << "|" << dna2.seq.size() << "\t";
-
-  if (opts.quick_mode) {
-    koss << call << ":Q";
-  }
-  else {
-    if (taxa.empty())
-      koss << "0:0";
+  if (!opts.classification) {
+    
+    if (call)
+      koss << "C\t";
     else
-      AddHitlistString(koss, taxa, taxonomy);
-  }
+      koss << "U\t";
+    if (! opts.paired_end_processing)
+      koss << dna.id << "\t";
+    else
+      koss << TrimPairInfo(dna.id) << "\t";
 
-  koss << endl;
+    auto ext_call = taxonomy.nodes()[call].external_id;
+    if (opts.print_scientific_name) {
+      const char *name = nullptr;
+      if (call) {
+        name = taxonomy.name_data() + taxonomy.nodes()[call].name_offset;
+      }
+      koss << (name ? name : "unclassified") << " (taxid " << ext_call << ")";
+    }
+    else {
+      koss << ext_call;
+    }
+
+    koss << "\t";
+    if (! opts.paired_end_processing)
+      koss << dna.seq.size() << "\t";
+    else
+      koss << dna.seq.size() << "|" << dna2.seq.size() << "\t";
+
+    if (opts.quick_mode) {
+      koss << call << ":Q";
+    }
+    else {
+      if (taxa.empty())
+        koss << "0:0";
+      else
+        AddHitlistString(koss, taxa, taxonomy);
+    }
+
+    koss << endl;
+  }
 
   if (call) {
     auto node = taxonomy.nodes()[call];
     bool is_species = false;
-          
-    while(true) {
+    bool found = false;   
+    while(!found) {
       if (IsSpecies(taxonomy, node)) {
         is_species = true;
-        break;
+        found = true;
       } else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
-        break;
+        found = true;
       }
       else {
         node = taxonomy.nodes()[node.parent_id];
@@ -706,11 +717,10 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     }
 
     if (is_species) {
-      cout << "Add minimizers found in the additional hashmap." << endl;
       for (auto minimizer : unknown_minimizer_seq) {
         #pragma omp critical(add_minimizers)
         {
-            add_map->AddPair(minimizer, call, taxonomy);
+            add_map.AddPair(minimizer, call, taxonomy);
         }
       }
     }
@@ -829,7 +839,7 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:A:t:o:a:T:p:R:C:U:O:Q:nmzqPSM")) != -1) {
+  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:nmzqPSMc")) != -1) {
     switch (opt) {
       case 'h' : case '?' :
         usage(0);
@@ -851,9 +861,6 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
         break;
       case 'o' :
         opts.options_filename = optarg;
-        break;
-      case 'a':
-        opts.add_opts_filename = optarg;
         break;
       case 'q' :
         opts.quick_mode = true;
@@ -896,6 +903,9 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
         break;
       case 'M' :
         opts.use_memory_mapping = true;
+        break;
+      case 'c' :
+        opts.classification = true;
         break;
     }
   }
