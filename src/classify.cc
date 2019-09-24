@@ -200,9 +200,9 @@ void ReportStats(struct timeval time1, struct timeval time2,
 
   double recall_s = 1.0 * stats.total_assegned_s / stats.total_sequences;
 
-  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? (2.0 * precision_g * recall_g) / (precision_g + recall_g) : -1.0;
+  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? ((2.0 * precision_g * recall_g) / (precision_g + recall_g)) * 100.0 : -1.0;
   
-  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? (2.0 * precision_s * recall_s) / (precision_s + recall_s) : -1.0;
+  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? ((2.0 * precision_s * recall_s) / (precision_s + recall_s))  * 100.0 : -1.0;
 
   if (isatty(fileno(stderr)))
     cerr << "\r";
@@ -225,13 +225,13 @@ void ReportStats(struct timeval time1, struct timeval time2,
           (unsigned long long) stats.total_assegned_g);
   fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
   fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
-  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g * 100.0);
+  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g);
   fprintf(stderr, "SPECIES LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at species level.\n", 
           (unsigned long long) stats.total_assegned_s);
   fprintf(stderr, "  precision at species level: %.2f%%.\n", precision_s * 100.0);
   fprintf(stderr, "  recall at species level: %.2f%%.\n", recall_s * 100.0);
-  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s * 100.0);
+  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s);
   
 }
 
@@ -346,35 +346,18 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          /*string rank;
-          while(true) {
-            rank = tax.rank_data() + node.rank_offset;
-            if (rank == "genus") {
-                thread_stats.total_assegned_g++;
-                break;
-            }
-            else if (rank == "species") { 
-              thread_stats.total_assegned_s++;
-              break;
-            } else if (rank == "root" || rank == "superkingdom" || rank == "kingdom" || rank == "phylum"
-                      || rank == "class" || rank == "order" || rank == "family") {
-              break;
-            }
-            else {
-              node = tax.nodes()[node.parent_id];
-            }
-          }*/
+          bool found = false;
 
-          while(true) {
+          while(!found) {
             if (IsGenus(tax, node)) {
                 thread_stats.total_assegned_g++;
-                break;
+                found = true;
             }
             else if (IsSpecies(tax, node)) { 
               thread_stats.total_assegned_s++;
-              break;
+              found = true;
             } else if (IsOther(tax, node)) {
-              break;
+              found = true;
             }
             else {
               node = tax.nodes()[node.parent_id];
