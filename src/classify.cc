@@ -221,7 +221,7 @@ void ReportStats(struct timeval time1, struct timeval time2,
           (unsigned long long) total_unclassified,
           total_unclassified * 100.0 / stats.total_sequences);
   fprintf(stderr, "GENUS LEVEL DATA\n");
-  fprintf(stderr, "  %llu sequences classified at genus level (sequences at species level not counted).\n", 
+  fprintf(stderr, "  %llu sequences classified at genus level.\n", 
           (unsigned long long) stats.total_assegned_g);
   fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
   fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
@@ -355,6 +355,20 @@ void ProcessFiles(const char *filename1, const char *filename2,
             }
             else if (IsSpecies(tax, node)) { 
               thread_stats.total_assegned_s++;
+              
+              //search if is a child of a genus level taxId
+              bool has_genus = false;
+              while (!has_genus) { 
+                if (IsGenus(tax, node)) {
+                  thread_stats.total_assegned_g++;
+                  has_genus = true;
+                } else if (IsOther(tax, node)) {
+                  has_genus = true;
+                } else {
+                  node = tax.nodes()[node.parent_id];
+                }
+              }
+
               found = true;
             } else if (IsOther(tax, node)) {
               found = true;
@@ -364,7 +378,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
             }
           }
 
-          /* <--- end added part ---> */
           /* <--- end added part ---> */
           seq1.header += buffer;
           seq2.header += buffer;

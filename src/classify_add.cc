@@ -231,7 +231,7 @@ void ReportStats(struct timeval time1, struct timeval time2,
           (unsigned long long) total_unclassified,
           total_unclassified * 100.0 / stats.total_sequences);
   fprintf(stderr, "GENUS LEVEL DATA\n");
-  fprintf(stderr, "  %llu sequences classified at genus level (sequences at species level not counted).\n", 
+  fprintf(stderr, "  %llu sequences classified at genus level.\n", 
           (unsigned long long) stats.total_assegned_g);
   fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
   fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
@@ -357,24 +357,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
 
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
-          /*string rank;
-          while(true) {
-            rank = tax.rank_data() + node.rank_offset;
-            if (rank == "genus") {
-                thread_stats.total_assegned_g++;
-                break;
-            }
-            else if (rank == "species") { 
-              thread_stats.total_assegned_s++;
-              break;
-            } else if (rank == "root" || rank == "superkingdom" || rank == "kingdom" || rank == "phylum"
-                      || rank == "class" || rank == "order" || rank == "family") {
-              break;
-            }
-            else {
-              node = tax.nodes()[node.parent_id];
-            }
-          }*/
           bool found = false;
           while(!found) {
             if (IsGenus(tax, node)) {
@@ -383,6 +365,20 @@ void ProcessFiles(const char *filename1, const char *filename2,
             }
             else if (IsSpecies(tax, node)) { 
               thread_stats.total_assegned_s++;
+              
+              //search if is a child of a genus level taxId
+              bool has_genus = false;
+              while (!has_genus) { 
+                if (IsGenus(tax, node)) {
+                  thread_stats.total_assegned_g++;
+                  has_genus = true;
+                } else if (IsOther(tax, node)) {
+                  has_genus = true;
+                } else {
+                  node = tax.nodes()[node.parent_id];
+                }
+              }
+              
               found = true;
             } else if (IsOther(tax, node)) {
               found = true;
@@ -613,7 +609,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
             taxon = 0;
             if (! skip_lookup) {
               taxon = hash->Get(*minimizer_ptr);
-              if(! taxon && ! add_map.IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
+              if(! taxon && ! add_map.IsEmpty()) { //minimizer not in the kraken2 DB, if the additional hashmap is not empty search
                taxon = add_map.GetTax(*minimizer_ptr);
               }
             }
