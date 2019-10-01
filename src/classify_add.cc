@@ -53,6 +53,8 @@ struct Options {
   bool single_file_pairs;
   int minimum_quality_score;
   bool use_memory_mapping;
+  bool classification;
+  int max_iteration;
 };
 
 struct ClassificationStats {
@@ -121,6 +123,8 @@ int main(int argc, char **argv) {
   ParseCommandLine(argc, argv, opts);
 
   omp_set_num_threads(opts.num_threads);
+
+  cerr << "Classify with additional hash map" << endl;
 
   cerr << "Loading database information...";
 
@@ -800,7 +804,7 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:nmzqPSMc")) != -1) {
+  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:l:nmzqPSMc")) != -1) {
     switch (opt) {
       case 'h' : case '?' :
         usage(0);
@@ -862,10 +866,14 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
       case 'Q' :
         opts.minimum_quality_score = atoi(optarg);
         break;
+      case 'l' :
+        opts.max_iteration = atoi(optarg);
+        break;
       case 'M' :
         opts.use_memory_mapping = true;
         break;
       case 'c' :
+        opts.classification = true;
         break;
     }
   }
@@ -904,6 +912,9 @@ void usage(int exit_code) {
        << "  -n               Print scientific name instead of taxid in Kraken output" << endl
        << "  -C filename      Filename/format to have classified sequences" << endl
        << "  -U filename      Filename/format to have unclassified sequences" << endl
-       << "  -O filename      Output file for normal Kraken output" << endl;
+       << "  -O filename      Output file for normal Kraken output" << endl
+       << "  -l NUM           Number of times the additional hash map is updated" << endl
+       << "  -c               Classify after the additional hash map is builded/upadted" << endl;
+       
   exit(exit_code);
 }

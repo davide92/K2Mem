@@ -57,6 +57,8 @@ my $use_mpa_style = 0;
 my $report_zero_counts = 0;
 my $enable_classification = 0;
 my $disable_add_map = 0;
+my $build_new_map = 0;
+my $max_iteration;
 
 GetOptions(
   "help" => \&display_help,
@@ -80,6 +82,8 @@ GetOptions(
   "report-zero-counts" => \$report_zero_counts,
   "enable-classification" => \$enable_classification,
   "disable-additional-map" => \$disable_add_map,
+  "build-new-map" => \$build_new_map,
+  "max-iteration=i" => \$max_iteration,
 );
 
 if (! defined $threads) {
@@ -106,6 +110,14 @@ for my $file ($taxonomy, $kht_file, $opt_file) {
 
 my $lfh;
 my $hash_plus = "$db_prefix/add_hash.k2d";
+
+if ($build_new_map) {
+  if (-e $hash_plus) {
+    unlink $hash_plus 
+      or die "Could not delete the file!\n";
+  }
+}
+
 #Create new files if not exist
 if (! -e $hash_plus) {  
 	open($lfh, '>', $hash_plus) or
@@ -155,6 +167,7 @@ push @flags, "-m" if $use_mpa_style;
 push @flags, "-z" if $report_zero_counts;
 push @flags, "-M" if $memory_mapping;
 push @flags, "-c" if $enable_classification;
+push @flags, "-l", $max_iteration;
 
 # Stupid hack to keep filehandles from closing before exec
 # filehandles opened inside for loop below go out of scope
@@ -245,8 +258,12 @@ Options:
   --use-names             Print scientific names instead of just taxids
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
+  --build-new-map         Build a new additional hashmap, if an additional
+                          hashmap file is present it is removed
+  --max-iteration         Maximum number of classification for create/update
+                          the additional map
   --disable-additional-map  
-                          Disable the build of the additional hashmap
+                          Disable the build/update of the additional hashmap
   --enable-classification              
                           Enable classsificatin with the additional hashmap
   --help                  Print this message

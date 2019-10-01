@@ -54,6 +54,7 @@ struct Options {
   int minimum_quality_score;
   bool use_memory_mapping;
   bool classification;
+  int max_iteration;
 };
 
 struct ClassificationStats {
@@ -103,6 +104,8 @@ void ReportStats(struct timeval time1, struct timeval time2,
     ClassificationStats &stats);
 void InitializeOutputs(Options &opts, OutputStreamData &outputs, SequenceFormat format);
 void MaskLowQualityBases(Sequence &dna, int minimum_quality_score);
+void UpdateTime(struct timeval time_total, struct timeval time);
+void UpdateTotalStats(ClassificationStats total_stats, ClassificationStats stats);
 
 
 int main(int argc, char **argv) {
@@ -119,15 +122,29 @@ int main(int argc, char **argv) {
   opts.minimum_quality_score = 0;
   opts.use_memory_mapping = false;
   opts.classification = false;
+  opts.max_iteration = 1;
 
   ParseCommandLine(argc, argv, opts);
 
+  if (!opts.report_filename.empty()) {
+    opts.report_filename.append("_1"); 
+  }
+
+  if (!opts.classified_output_filename.empty()) {
+    opts.classified_output_filename.append("_1"); 
+  }
+
+  if (!opts.unclassified_output_filename.empty()) {
+    opts.unclassified_output_filename.append("_1"); 
+  }
+
+  if (!opts.kraken_output_filename.empty()) {
+    opts.kraken_output_filename.append("_1"); 
+  }
+
   omp_set_num_threads(opts.num_threads);
 
-  opts.report_filename.append("_1");   
-  opts.classified_output_filename.append("_1");
-  opts.unclassified_output_filename.append("_1");
-  opts.kraken_output_filename.append("_1");
+  cerr << "Create/update additional hash map" << endl;
 
   cerr << "Loading database information...";
 
@@ -138,7 +155,6 @@ int main(int argc, char **argv) {
 
   Taxonomy taxonomy(opts.taxonomy_filename, opts.use_memory_mapping);
   KeyValueStore *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
-  //CompactHashTable *hash_ptr = new CompactHashTable(opts.index_filename, opts.use_memory_mapping);
 
   cerr << " done." << endl;
 
@@ -149,49 +165,64 @@ int main(int argc, char **argv) {
 
   cerr << " done." <<endl;
 
-  ClassificationStats stats = {0, 0, 0, 0, 0};
+  int iteration = 0;
+
+  struct timeval tv1_tot, tv2_tot;
+
+  ClassificationStats total_stats = {0, 0, 0, 0, 0};
+
   taxon_counts_t call_counts; //unordered_map<taxid_t, uint64_t> taxon_counts_t;
 
   OutputStreamData outputs = { false, false, nullptr, nullptr, nullptr, nullptr, &std::cout };
 
-  struct timeval tv1, tv2;
-  gettimeofday(&tv1, nullptr);
-  if (optind == argc) {
-    if (opts.paired_end_processing && ! opts.single_file_pairs)
-      errx(EX_USAGE, "paired end processing used with no files specified");
-    ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map);
-  }
-  else {
-    for (int i = optind; i < argc; i++) {
-      if (opts.paired_end_processing && ! opts.single_file_pairs) {
-        if (i + 1 == argc) {
-          errx(EX_USAGE, "paired end processing used with unpaired file");
+  do {
+    ClassificationStats stats = {0, 0, 0, 0, 0};
+
+    call_counts.clear();
+
+    struct timeval tv1, tv2;
+    gettimeofday(&tv1, nullptr);
+    if (optind == argc) {
+      if (opts.paired_end_processing && ! opts.single_file_pairs)
+        errx(EX_USAGE, "paired end processing used with no files specified");
+      ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map);
+    }
+    else {
+      for (int i = optind; i < argc; i++) {
+        if (opts.paired_end_processing && ! opts.single_file_pairs) {
+          if (i + 1 == argc) {
+            errx(EX_USAGE, "paired end processing used with unpaired file");
+          }
+          ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //paired
+          i += 1;
         }
-        ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //paired
-        i += 1;
-      }
-      else {
-        ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //single
+        else {
+          ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //single
+        }
       }
     }
-  }
-  gettimeofday(&tv2, nullptr);
+    gettimeofday(&tv2, nullptr);
+    iteration++;
+    UpdateTime(tv1_tot, tv1);
+    UpdateTime(tv2_tot, tv2);
+    UpdateTotalStats(total_stats, stats);
+  } while(iteration < opts.max_iteration);
 
   add_map.WriteHashMap(opts.add_map_filename.c_str());
 
   delete hash_ptr;
 
   if (!opts.classification)  {
-    ReportStats(tv1, tv2, stats);
+    ReportStats(tv1_tot, tv2_tot, total_stats);
 
     if (! opts.report_filename.empty()) {
       if (opts.mpa_style_report)
         ReportMpaStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
             call_counts);
       else {
-        auto total_unclassified = stats.total_sequences - stats.total_classified;
+        auto total_unclassified = total_stats.total_sequences - total_stats.total_classified;
         ReportKrakenStyle(opts.report_filename, opts.report_zero_counts, taxonomy,
-            call_counts, stats.total_sequences, total_unclassified);
+            call_counts, total_stats.total_sequences, total_unclassified);
       }
     }
   }
@@ -262,9 +293,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts, 
     AdditionalHashMap &add_map)
-{
+{ 
   std::istream *fptr1 = nullptr, *fptr2 = nullptr;
-
   if (filename1 == nullptr)
     fptr1 = &std::cin;
   else {
@@ -273,7 +303,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
   if (opts.paired_end_processing && ! opts.single_file_pairs) {
     fptr2 = new std::ifstream(filename2);
   }
-
   // The priority queue for output is designed to ensure fragment data
   // is output in the same order it was input
   auto comparator = [](const OutputData &a, const OutputData &b) {
@@ -307,7 +336,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
       thread_stats.total_bases = 0;
       thread_stats.total_classified = 0;
       thread_stats.total_assegned_g = 0;
-      thread_stats.total_assegned_s = 0;    
+      thread_stats.total_assegned_s = 0;
 
       auto ok_read = false;
 
@@ -343,7 +372,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
       c2_oss.str("");
       u1_oss.str("");
       u2_oss.str("");
-      
 
       while (true) {
         auto valid_fragment = reader1.NextSequence(seq1);
@@ -623,13 +651,11 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                 skip_lookup = true;
             }
             taxon = 0;
-            if (! skip_lookup)
+            if (! skip_lookup) {
               taxon = hash->Get(*minimizer_ptr);
-            last_taxon = taxon;
-            last_minimizer = *minimizer_ptr;
-            
-            if(! taxon && ! add_map.IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
+              if(! taxon && ! add_map.IsEmpty()) {//minimizer not in the kraken2 DB, if the additional hashmap is not empty search
                taxon = add_map.GetTax(*minimizer_ptr);
+              }
             }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
@@ -852,7 +878,7 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:nmzqPSMc")) != -1) {
+  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:l:nmzqPSMc")) != -1) {
     switch (opt) {
       case 'h' : case '?' :
         usage(0);
@@ -914,6 +940,9 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
       case 'Q' :
         opts.minimum_quality_score = atoi(optarg);
         break;
+      case 'l' :
+        opts.max_iteration = atoi(optarg);
+        break;
       case 'M' :
         opts.use_memory_mapping = true;
         break;
@@ -937,6 +966,20 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
   }
 }
 
+void UpdateTime(struct timeval time_total, struct timeval time) {
+  time_total.tv_usec += time.tv_usec;
+  time_total.tv_sec += time.tv_sec; 
+}
+
+void UpdateTotalStats(ClassificationStats total_stats, ClassificationStats stats) {
+  
+  total_stats.total_sequences += stats.total_sequences;
+  total_stats.total_bases += stats.total_bases;
+  total_stats.total_classified = stats.total_classified;
+  total_stats.total_assegned_g = stats.total_assegned_g;
+  total_stats.total_assegned_s = stats.total_assegned_s;  
+}
+
 void usage(int exit_code) {
   cerr << "Usage: classify [options] <fasta/fastq file(s)>" << endl
        << endl
@@ -957,6 +1000,8 @@ void usage(int exit_code) {
        << "  -n               Print scientific name instead of taxid in Kraken output" << endl
        << "  -C filename      Filename/format to have classified sequences" << endl
        << "  -U filename      Filename/format to have unclassified sequences" << endl
-       << "  -O filename      Output file for normal Kraken output" << endl;
+       << "  -O filename      Output file for normal Kraken output" << endl
+       << "  -l NUM           Number of times the additional hash map is updated" << endl
+       << "  -c               Classify after the additional hash map is builded/upadted" << endl;
   exit(exit_code);
 }
