@@ -893,7 +893,7 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
 }
 
 void usage(int exit_code) {
-  cerr << "Usage: classify [options] <fasta/fastq file(s)>" << endl
+  cerr << "Usage: classify-plus [options] <fasta/fastq file(s)>" << endl
        << endl
        << "Options: (*mandatory)" << endl
        << "* -H filename      Kraken 2 index filename" << endl

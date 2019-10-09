@@ -88,8 +88,7 @@ namespace kraken2 {
 			    }
 	    	}
 
-			ofile.close();
-	  		
+			ofile.close();	  		
 		}
 	}
 }

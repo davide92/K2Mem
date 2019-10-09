@@ -7,3 +7,5 @@ src/estimate_capacity
 src/dump_table
 src/lookup_accession_numbers
 src/classify_plus
+src/pearson_correlation.cpp
+scripts/kraken2-pearson
