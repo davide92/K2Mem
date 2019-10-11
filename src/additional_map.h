@@ -13,7 +13,6 @@ namespace kraken2 {
 
 		void ReadFile(const char *filename);
 		void AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy);
-		void Add(uint64_t minimizer, taxid_t tax_id);
 		taxid_t GetTax(uint64_t minimizer);
 		size_t GetSize();
 		void WriteHashMap(const char *filename);
@@ -21,7 +20,9 @@ namespace kraken2 {
 
 
 	private:
-		std::unordered_map<uint64_t, taxid_t> ump;		  
+		std::unordered_map<uint64_t, taxid_t> ump;
+
+		void Add(uint64_t minimizer, taxid_t tax_id);		  
 	};
 
 }

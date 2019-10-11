@@ -46,9 +46,10 @@ namespace kraken2 {
 		if (ump.find(minimizer) != ump.end())	{
 			old_tax = ump[minimizer];
 			new_tax = taxonomy.LowestCommonAncestor(new_tax, old_tax);
+			ump[minimizer] = new_tax;
+		} else {
+			Add(minimizer, new_tax);
 		}
-
-		ump.emplace(minimizer, new_tax);
 	}
 
 	void AdditionalHashMap::Add(uint64_t minimizer, taxid_t tax_id) {
@@ -66,10 +67,6 @@ namespace kraken2 {
 	}	
 	
 	size_t AdditionalHashMap::GetSize() {
-		/*if ( ump.size() != total_size) {
-			total_size = ump.size();
-		}
-		return total_size;*/
 		return ump.size();
 	}
 
