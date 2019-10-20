@@ -55,7 +55,8 @@ my $minimum_base_quality = 0;
 my $report_filename;
 my $use_mpa_style = 0;
 my $report_zero_counts = 0;
-my $enable_classification = 0;
+my $disable_classification = 0;
+my $enable_classification = !$disable_classification;
 my $disable_add_map = 0;
 my $build_new_map = 0;
 my $max_iteration;
@@ -80,7 +81,7 @@ GetOptions(
   "report=s" => \$report_filename,
   "use-mpa-style" => \$use_mpa_style,
   "report-zero-counts" => \$report_zero_counts,
-  "enable-classification" => \$enable_classification,
+  "disable-classification" => \$disable_classification,
   "disable-additional-map" => \$disable_add_map,
   "build-new-map" => \$build_new_map,
   "max-iteration=i" => \$max_iteration,
@@ -264,8 +265,8 @@ Options:
                           the additional map
   --disable-additional-map  
                           Disable the build/update of the additional hashmap
-  --enable-classification              
-                          Enable classsificatin with the additional hashmap
+  --disable-classification              
+                          Disable classification with the additional hashmap
   --help                  Print this message
   --version               Print version information
 
