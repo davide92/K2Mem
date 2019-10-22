@@ -59,7 +59,7 @@ my $disable_classification = 0;
 my $enable_classification = !$disable_classification;
 my $disable_add_map = 0;
 my $build_new_map = 0;
-my $max_iteration;
+my $max_iteration = 1;
 
 GetOptions(
   "help" => \&display_help,
