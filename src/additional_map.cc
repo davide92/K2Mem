@@ -16,7 +16,7 @@ namespace kraken2 {
     	return pFile.peek() == ifstream::traits_type::eof();
 	}
 	
-	void AdditionalHashMap::ReadFile(const char *filename) {
+	void AdditionalMap::ReadFile(const char *filename) {
 
 	    ifstream ifile(filename);
 
@@ -39,7 +39,7 @@ namespace kraken2 {
 		
 	}
 
-	void AdditionalHashMap::AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy) {
+	void AdditionalMap::AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy) {
 		taxid_t new_tax = tax_id;
 		taxid_t old_tax = 0;
 
@@ -52,11 +52,11 @@ namespace kraken2 {
 		}
 	}
 
-	void AdditionalHashMap::Add(uint64_t minimizer, taxid_t tax_id) {
+	void AdditionalMap::Add(uint64_t minimizer, taxid_t tax_id) {
 		ump.emplace(minimizer, tax_id);
 	}
 	
-	taxid_t AdditionalHashMap::GetTax(uint64_t minimizer) {
+	taxid_t AdditionalMap::GetTax(uint64_t minimizer) {
 		taxid_t tax = 0;
 
 		if (ump.find(minimizer) != ump.end()) {
@@ -66,15 +66,15 @@ namespace kraken2 {
 		return tax;
 	}	
 	
-	size_t AdditionalHashMap::GetSize() {
+	size_t AdditionalMap::GetSize() {
 		return ump.size();
 	}
 
-	bool AdditionalHashMap::IsEmpty(){
+	bool AdditionalMap::IsEmpty(){
 		return ump.size() == 0;
 	}
 	
-	void AdditionalHashMap::WriteHashMap(const char *filename) {
+	void AdditionalMap::WriteMap(const char *filename) {
 		
 		if (GetSize()) {
 			ofstream ofile(filename);

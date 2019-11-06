@@ -7,7 +7,7 @@
 
 namespace kraken2 {
 
-	class AdditionalHashMap {
+	class AdditionalMap {
 
 	public:	
 
@@ -15,7 +15,7 @@ namespace kraken2 {
 		void AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy);
 		taxid_t GetTax(uint64_t minimizer);
 		size_t GetSize();
-		void WriteHashMap(const char *filename);
+		void WriteMap(const char *filename);
 		bool IsEmpty();
 
 

@@ -90,12 +90,12 @@ void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts, 
-    AdditionalHashMap &add_map);
+    AdditionalMap &add_map);
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, AdditionalHashMap &add_map);
+    vector<string> &tx_frames, AdditionalMap &add_map);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
 
   cerr << "Loading additional hashmap...";
 
-  AdditionalHashMap add_map;
+  AdditionalMap add_map;
   add_map.ReadFile(opts.add_map_filename.c_str());
 
   cerr << " done." <<endl;
@@ -253,7 +253,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
     OutputStreamData &outputs, taxon_counts_t &call_counts, 
-    AdditionalHashMap &add_map)
+    AdditionalMap &add_map)
 {
   std::istream *fptr1 = nullptr, *fptr2 = nullptr;
 
@@ -572,7 +572,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames, AdditionalHashMap &add_map)
+    vector<string> &tx_frames, AdditionalMap &add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
