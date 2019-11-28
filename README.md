@@ -1,4 +1,4 @@
-master_thesis
+Kraken 2 plus
 =============
 
 kraken2
