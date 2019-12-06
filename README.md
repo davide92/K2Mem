@@ -18,7 +18,7 @@ To create the standard database, you can use the following command:
 
     kraken2-build --standard --db $DBNAME
 
-(Replace "`$DBNAME`" above with your preferred database name/location.)
+(Replace `$DBNAME` above with your preferred database name/location.)
 
 Classification
 --------------
