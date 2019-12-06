@@ -40,7 +40,7 @@ do
 done
 
 echo
-echo "Kraken 2 installation complete."
+echo "Kraken 2 plus installation complete."
 echo
 echo "To make things easier for you, you may want to copy/symlink the following"
 echo "files into a directory in your PATH:"
