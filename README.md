@@ -1,7 +1,7 @@
 Kraken 2 plus
 =============
 
-Kraken 2 plus is a variant of [Kraken 2](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1891-0) taxonomic sequence classification system.
+Kraken 2 plus is a variant of [Kraken 2](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1891-0) taxonomic sequence classification system.  
 Kraken 2 plus, compared to Kraken 2, can learn from the previous classifications.
 
 Installation
