@@ -185,7 +185,7 @@ if ($compressed) {
     $compression_program = "bzip2";
   }
   else {
-    die "$PROG: unrecognized compression program! This is a Kraken bug.\n";
+    die "$PROG: unrecognized compression program! This is a K2Mem bug.\n";
   }
   for my $file (@ARGV) {
     my $qm_file = quotemeta $file;
@@ -234,7 +234,7 @@ sub usage {
 Usage: $PROG [options] <filename(s)>
 
 Options:
-  --db NAME               Name for Kraken 2 DB
+  --db NAME               Name for K2Mem DB
                           (default: $default_db)
   --threads NUM           Number of threads (default: $def_thread_ct)
   --quick                 Quick operation (use first hit or hits)
@@ -281,8 +281,8 @@ sub display_help {
 }
 
 sub display_version {
-  print "Kraken version #####=VERSION=#####\n";
-  print "Copyright 2013-2019, Derrick Wood (dwood\@cs.jhu.edu)\n";
+  print "K2Mem version #####=VERSION=#####\n";
+  print "Copyright 2013-2020, Davide Storato\n";
   exit 0;
 }
 

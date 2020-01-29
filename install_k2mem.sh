@@ -17,7 +17,7 @@ fi
 if [ "$1" = "KRAKEN2_DIR" ]
 then
   echo "Please replace \"KRAKEN2_DIR\" with the name of the directory"
-  echo "that you want to install Kraken 2 in."
+  echo "that you want to install K2Mem in."
   exit 1
 fi
 
@@ -40,7 +40,7 @@ do
 done
 
 echo
-echo "Kraken 2 plus installation complete."
+echo "K2Mem installation complete."
 echo
 echo "To make things easier for you, you may want to copy/symlink the following"
 echo "files into a directory in your PATH:"
@@ -51,3 +51,4 @@ do
     echo "  $file"
   fi
 done
+echo "   ${KRAKEN2_DIR}/k2mem"
