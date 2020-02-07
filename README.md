@@ -4,7 +4,8 @@ K2Mem
 The major problem when analyzing a metagenomic sample is to taxonomically annotate its reads in order to identify the species they contain.
 Most of the methods currently available focus on the classification of reads using a set of reference genomes and their k-mers. While in terms of precision these methods have reached percentages of correctness close to perfection, in terms of recall (the actual number of classified reads) the performances fall at around 50%. 
 One of the reasons is the fact that the sequences in a sample can be very different from the corresponding reference genome, e.g. viral genomes are highly mutated.  
-To address this issue, in this paper we study the problem of metagenomic reads classification by improving the reference k-mers library with novel discriminative k-mers from the input sequencing reads. We evaluated the performance in different conditions against several other tools and the results showed an improved F-measure, especially when close reference genomes are not available. 
+To address this issue, is studied the problem of metagenomic reads classification by improving the reference k-mers library with novel discriminative k-mers from the input sequencing reads
+and is proposed a metagenomics classification tool, named [K2Mem](), that is based, not only on a set of reference genomes, but also it uses discriminative k-mers from the input metagenomics reads in order to improve the classification. The basic idea is to add memory to a classification pipeline, so that previously analysed reads can be of help to the classification.
 
 Installation
 ------------
