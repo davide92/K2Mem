@@ -1,8 +1,10 @@
 K2Mem
 =====
 
-K2Mem is a variant of [Kraken 2](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1891-0) taxonomic sequence classification system.  
-K2Mem, compared to Kraken 2, can learn from the previous classifications.
+The major problem when analyzing a metagenomic sample is to taxonomically annotate its reads in order to identify the species they contain.
+Most of the methods currently available focus on the classification of reads using a set of reference genomes and their k-mers. While in terms of precision these methods have reached percentages of correctness close to perfection, in terms of recall (the actual number of classified reads) the performances fall at around 50%. 
+One of the reasons is the fact that the sequences in a sample can be very different from the corresponding reference genome, e.g. viral genomes are highly mutated.  
+To address this issue, in this paper we study the problem of metagenomic reads classification by improving the reference k-mers library with novel discriminative k-mers from the input sequencing reads. We evaluated the performance in different conditions against several other tools and the results showed an improved F-measure, especially when close reference genomes are not available. 
 
 Installation
 ------------
@@ -16,25 +18,22 @@ Standard database
 -----------------
 To create the standard database, you can use the following command:
 
-    kraken2-build --standard --db $DBNAME
+    k2mem-build --standard --db $DBNAME
 
 (Replace `$DBNAME` above with your preferred database name/location.)
 
 Classification
 --------------
-To classify a set of sequences, use the `kraken2` command:
-
-    kraken2 --db $DBNAME seqs.fa
-
 To classify a set of sequences using the informations obtained from the previous classifications, use the `k2mem` command:
 
     k2mem --db $DBNAME seqs.fa
 
 in both cases output will be sent to standard output by default.
 
-To get a full list of options, use `kraken2 --help` or `k2mem --help`.
+To get a full list of options, use  `k2mem --help`.
 
 References
 ----------
+[(Paper in submision) Improving Metagenomic Classification using discriminative k-mers from sequencing data]()
 [Kraken 2 webpage](https://ccb.jhu.edu/software/kraken2/)  
 [Kraken 2 manual](https://ccb.jhu.edu/software/kraken2/index.shtml?t=manual)

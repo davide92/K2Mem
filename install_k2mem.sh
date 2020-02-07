@@ -44,11 +44,11 @@ echo "K2Mem installation complete."
 echo
 echo "To make things easier for you, you may want to copy/symlink the following"
 echo "files into a directory in your PATH:"
-for file in $KRAKEN2_DIR/kraken2*
+for file in $KRAKEN2_DIR/k2mem*
 do
   if [ -x "$file" ]
   then
     echo "  $file"
   fi
 done
-echo "   ${KRAKEN2_DIR}/k2mem"
+

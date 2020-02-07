@@ -17,13 +17,13 @@ my $PROG = basename $0;
 my $KRAKEN2_DIR = '#####=KRAKEN2_DIR=#####';
 
 # Test to see if the executables got moved, try to recover if we can
-if (! -e "$KRAKEN2_DIR/classify_plus") {
+if (! -e "$KRAKEN2_DIR/search_phase") {
   use Cwd 'abs_path';
   $KRAKEN2_DIR = dirname abs_path($0);
 }
 
 # Test to see if the executables got moved, try to recover if we can
-if (! -e "$KRAKEN2_DIR/classify_add") {
+if (! -e "$KRAKEN2_DIR/classify") {
   use Cwd 'abs_path';
   $KRAKEN2_DIR = dirname abs_path($0);
 }
@@ -32,8 +32,8 @@ require "$KRAKEN2_DIR/kraken2lib.pm";
 $ENV{"KRAKEN2_DIR"} = $KRAKEN2_DIR;
 $ENV{"PATH"} = "$KRAKEN2_DIR:$ENV{PATH}";
 
-my $CLASSIFY_PLUS = "$KRAKEN2_DIR/classify_plus";
-my $CLASSIFY = "$KRAKEN2_DIR/classify_add";
+my $SEARCH_PHASE = "$KRAKEN2_DIR/search_phase";
+my $CLASSIFY = "$KRAKEN2_DIR/classify";
 my $GZIP_MAGIC = chr(hex "1f") . chr(hex "8b");
 my $BZIP2_MAGIC = "BZ";
 
@@ -58,7 +58,7 @@ my $report_zero_counts = 0;
 my $disable_classification = 0;
 my $enable_classification = !$disable_classification;
 my $disable_add_map = 0;
-my $build_new_map = 0;
+my $keep_map = 0;
 my $max_iteration = 1;
 
 GetOptions(
@@ -83,7 +83,7 @@ GetOptions(
   "report-zero-counts" => \$report_zero_counts,
   "disable-classification" => \$disable_classification,
   "disable-additional-map" => \$disable_add_map,
-  "build-new-map" => \$build_new_map,
+  "keep-map" => \$keep_map,
   "max-iteration=i" => \$max_iteration,
 );
 
@@ -112,7 +112,7 @@ for my $file ($taxonomy, $kht_file, $opt_file) {
 my $lfh;
 my $hash_plus = "$db_prefix/add_hash.k2d";
 
-if ($build_new_map) {
+if (! $keep_map) {
   if (-e $hash_plus) {
     unlink $hash_plus 
       or die "Could not delete the file!\n";
@@ -202,13 +202,13 @@ if ($compressed) {
   @ARGV = @replacement_ARGV;
 }
 
-#exec $CLASSIFY_PLUS, @flags, @ARGV;
+#exec $SEARCH_PHASE, @flags, @ARGV;
 #die "$PROG: exec error: $!\n";
 
 if(! $disable_add_map) {
   my $start = time();
-  system($CLASSIFY_PLUS, @flags, @ARGV) == 0
-    or die "system failed to execute classify_plus: $?";
+  system($SEARCH_PHASE, @flags, @ARGV) == 0
+    or die "system failed to execute search_phase: $?";
   my $end = time();
 
   print STDOUT sprintf("Execution time to classify and create the additional map: %0.02f s\n", $end - $start);
@@ -218,7 +218,7 @@ if(! $disable_add_map) {
 if($enable_classification) {
   my $start = time();
   system($CLASSIFY, @flags, @ARGV) == 0
-    or die "system failed to execute classify_add: $?";
+    or die "system failed to execute classify: $?";
   my $end = time();
 
   print STDOUT sprintf("Execution time to classify with the additional map: %0.02f s\n", $end - $start);
@@ -259,8 +259,7 @@ Options:
   --use-names             Print scientific names instead of just taxids
   --gzip-compressed       Input files are compressed with gzip
   --bzip2-compressed      Input files are compressed with bzip2
-  --build-new-map         Build a new additional hashmap, if an additional
-                          hashmap file is present it is removed
+  --keep-map         	  Keep and update the additiional map if is present
   --max-iteration         Maximum number of classification for create/update
                           the additional map
   --disable-additional-map  

@@ -14,6 +14,7 @@
 #include "aa_translate.h"
 #include "reports.h"
 #include "utilities.h"
+#include "additional_map.h"
 
 using std::cout;
 using std::cerr;
@@ -40,6 +41,7 @@ struct Options {
   string classified_output_filename;
   string unclassified_output_filename;
   string kraken_output_filename;
+  string add_map_filename;
   bool mpa_style_report;
   bool quick_mode;
   bool report_zero_counts;
@@ -51,6 +53,8 @@ struct Options {
   bool single_file_pairs;
   int minimum_quality_score;
   bool use_memory_mapping;
+  bool classification;
+  int max_iteration;
 };
 
 struct ClassificationStats {
@@ -85,12 +89,13 @@ void usage(int exit_code=EX_USAGE);
 void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
-    OutputStreamData &outputs, taxon_counts_t &call_counts);
+    OutputStreamData &outputs, taxon_counts_t &call_counts, 
+    AdditionalMap &add_map);
 taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &tax, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames);
+    vector<string> &tx_frames, AdditionalMap &add_map);
 void AddHitlistString(ostringstream &oss, vector<taxid_t> &taxa,
     Taxonomy &taxonomy);
 taxid_t ResolveTree(taxon_counts_t &hit_counts,
@@ -119,6 +124,8 @@ int main(int argc, char **argv) {
 
   omp_set_num_threads(opts.num_threads);
 
+  cerr << "Classify with additional hash map" << endl;
+
   cerr << "Loading database information...";
 
   IndexOptions idx_opts = {0};
@@ -131,6 +138,13 @@ int main(int argc, char **argv) {
 
   cerr << " done." << endl;
 
+  cerr << "Loading additional hashmap...";
+
+  AdditionalMap add_map;
+  add_map.ReadFile(opts.add_map_filename.c_str());
+
+  cerr << " done." <<endl;
+
   ClassificationStats stats = {0, 0, 0, 0, 0};
   taxon_counts_t call_counts; //unordered_map<taxid_t, uint64_t> taxon_counts_t;
 
@@ -141,7 +155,7 @@ int main(int argc, char **argv) {
   if (optind == argc) {
     if (opts.paired_end_processing && ! opts.single_file_pairs)
       errx(EX_USAGE, "paired end processing used with no files specified");
-    ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts);
+    ProcessFiles(nullptr, nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map);
   }
   else {
     for (int i = optind; i < argc; i++) {
@@ -149,11 +163,11 @@ int main(int argc, char **argv) {
         if (i + 1 == argc) {
           errx(EX_USAGE, "paired end processing used with unpaired file");
         }
-        ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts); //paired
+        ProcessFiles(argv[i], argv[i+1], hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //paired
         i += 1;
       }
       else {
-        ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts); //single
+        ProcessFiles(argv[i], nullptr, hash_ptr, taxonomy, idx_opts, opts, stats, outputs, call_counts, add_map); //single
       }
     }
   }
@@ -200,13 +214,13 @@ void ReportStats(struct timeval time1, struct timeval time2,
 
   double recall_s = 1.0 * stats.total_assegned_s / stats.total_sequences;
 
-  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? ((2.0 * precision_g * recall_g) / (precision_g + recall_g)) * 100.0 : -1.0;
+  double f_mesure_g = (recall_g != 0 && precision_g != 0) ? (2.0 * precision_g * recall_g) / (precision_g + recall_g) : -1.0;
   
-  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? ((2.0 * precision_s * recall_s) / (precision_s + recall_s))  * 100.0 : -1.0;
+  double f_mesure_s = (recall_s != 0 && precision_s != 0) ? (2.0 * precision_s * recall_s) / (precision_s + recall_s) : -1.0;
 
   if (isatty(fileno(stderr)))
     cerr << "\r";
-  fprintf(stderr, "GENERAL DATA\n");
+  fprintf(stderr, "\nGENERAL DATA\n");
   fprintf(stderr,
           "%llu sequences (%.2f Mbp) processed in %.3fs (%.1f Kseq/m, %.2f Mbp/m).\n",
           (unsigned long long) stats.total_sequences,
@@ -225,20 +239,21 @@ void ReportStats(struct timeval time1, struct timeval time2,
           (unsigned long long) stats.total_assegned_g);
   fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
   fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
-  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g);
+  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g * 100.0);
   fprintf(stderr, "SPECIES LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at species level.\n", 
           (unsigned long long) stats.total_assegned_s);
   fprintf(stderr, "  precision at species level: %.2f%%.\n", precision_s * 100.0);
   fprintf(stderr, "  recall at species level: %.2f%%.\n", recall_s * 100.0);
-  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s);
+  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s * 100.0);
   
 }
 
 void ProcessFiles(const char *filename1, const char *filename2,
     KeyValueStore *hash, Taxonomy &tax,
     IndexOptions &idx_opts, Options &opts, ClassificationStats &stats,
-    OutputStreamData &outputs, taxon_counts_t &call_counts)
+    OutputStreamData &outputs, taxon_counts_t &call_counts, 
+    AdditionalMap &add_map)
 {
   std::istream *fptr1 = nullptr, *fptr2 = nullptr;
 
@@ -339,7 +354,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
         }
         auto call = ClassifySequence(seq1, seq2,
             kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
-            taxa, hit_counts, translated_frames);
+            taxa, hit_counts, translated_frames, add_map);
         if (call) {
           char buffer[1024] = "";
           sprintf(buffer, " kraken:taxid|%lu", tax.nodes()[call].external_id);
@@ -347,7 +362,6 @@ void ProcessFiles(const char *filename1, const char *filename2,
           /* <--- added part: see the taxonomy rank of the classified sequence ---> */
           TaxonomyNode node = tax.nodes()[call];
           bool found = false;
-
           while(!found) {
             if (IsGenus(tax, node)) {
                 thread_stats.total_assegned_g++;
@@ -368,7 +382,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   node = tax.nodes()[node.parent_id];
                 }
               }
-
+              
               found = true;
             } else if (IsOther(tax, node)) {
               found = true;
@@ -378,6 +392,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
             }
           }
 
+          /* <--- end added part ---> */
           /* <--- end added part ---> */
           seq1.header += buffer;
           seq2.header += buffer;
@@ -557,7 +572,7 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     KeyValueStore *hash, Taxonomy &taxonomy, IndexOptions &idx_opts,
     Options &opts, ClassificationStats &stats, MinimizerScanner &scanner,
     vector<taxid_t> &taxa, taxon_counts_t &hit_counts,
-    vector<string> &tx_frames)
+    vector<string> &tx_frames, AdditionalMap &add_map)
 {
   uint64_t *minimizer_ptr;
   taxid_t call = 0;
@@ -596,8 +611,12 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
                 skip_lookup = true;
             }
             taxon = 0;
-            if (! skip_lookup)
+            if (! skip_lookup) {
               taxon = hash->Get(*minimizer_ptr);
+              if(! taxon && ! add_map.IsEmpty()) { //minimizer not in the kraken2 DB, if the additional hashmap is not empty search
+               taxon = add_map.GetTax(*minimizer_ptr);
+              }
+            }
             last_taxon = taxon;
             last_minimizer = *minimizer_ptr;
           }
@@ -785,13 +804,16 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:t:o:T:p:R:C:U:O:Q:nmzqPSM")) != -1) {
+  while ((opt = getopt(argc, argv, "h?H:A:t:o:T:p:R:C:U:O:Q:l:nmzqPSMc")) != -1) {
     switch (opt) {
       case 'h' : case '?' :
         usage(0);
         break;
       case 'H' :
         opts.index_filename = optarg;
+        break;
+      case 'A' :
+        opts.add_map_filename = optarg;
         break;
       case 't' :
         opts.taxonomy_filename = optarg;
@@ -844,8 +866,14 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
       case 'Q' :
         opts.minimum_quality_score = atoi(optarg);
         break;
+      case 'l' :
+        opts.max_iteration = atoi(optarg);
+        break;
       case 'M' :
         opts.use_memory_mapping = true;
+        break;
+      case 'c' :
+        opts.classification = true;
         break;
     }
   }
@@ -865,7 +893,7 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
 }
 
 void usage(int exit_code) {
-  cerr << "Usage: classify [options] <fasta/fastq file(s)>" << endl
+  cerr << "Usage: classify-plus [options] <fasta/fastq file(s)>" << endl
        << endl
        << "Options: (*mandatory)" << endl
        << "* -H filename      Kraken 2 index filename" << endl
@@ -884,6 +912,9 @@ void usage(int exit_code) {
        << "  -n               Print scientific name instead of taxid in Kraken output" << endl
        << "  -C filename      Filename/format to have classified sequences" << endl
        << "  -U filename      Filename/format to have unclassified sequences" << endl
-       << "  -O filename      Output file for normal Kraken output" << endl;
+       << "  -O filename      Output file for normal Kraken output" << endl
+       << "  -l NUM           Number of times the additional hash map is updated" << endl
+       << "  -c               Classify after the additional hash map is builded/upadted" << endl;
+       
   exit(exit_code);
 }

@@ -4,7 +4,7 @@ CXXFLAGS += -DLINEAR_PROBING
 
 .PHONY: all clean install
 
-PROGS = estimate_capacity build_db classify classify_plus classify_add dump_table lookup_accession_numbers
+PROGS = estimate_capacity build_db search_phase classify dump_table lookup_accession_numbers
 
 all: $(PROGS)
 
@@ -27,11 +27,9 @@ utilities.o: utilities.cc utilities.h
 
 build_db: build_db.cc mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o utilities.o
 
-classify: classify.cc reports.o mmap_file.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
+search_phase: search_phase.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
 
-classify_plus: classify_plus.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
-
-classify_add: classify_add.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
+classify: classify.cc reports.o mmap_file.o additional_map.o compact_hash.o taxonomy.o seqreader.o mmscanner.o omp_hack.o aa_translate.o utilities.o
 
 estimate_capacity: estimate_capacity.cc seqreader.o mmscanner.o omp_hack.o utilities.o
 
