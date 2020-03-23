@@ -281,7 +281,7 @@ sub display_help {
 
 sub display_version {
   print "K2Mem version #####=VERSION=#####\n";
-  print "Copyright 2013-2020, Davide Storato\n";
+  print "Copyright 2019-2020, Davide Storato.\n";
   exit 0;
 }
 

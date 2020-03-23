@@ -236,8 +236,8 @@ sub display_help {
 }
 
 sub display_version {
-  print "Kraken version #####=VERSION=#####\n";
-  print "Copyright 2013-2019, Derrick Wood (dwood\@cs.jhu.edu)\n";
+  print "K2Mem version #####=VERSION=#####\n";
+  print "Copyright 2019-2020, Davide Storato.\n";
   exit 0;
 }
 
