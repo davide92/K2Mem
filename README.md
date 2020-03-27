@@ -36,5 +36,6 @@ To get a full list of options, use  `k2mem --help`.
 References
 ----------
 [Improving Metagenomic Classification using discriminative k-mers from sequencing data (Preprint)](https://www.biorxiv.org/content/10.1101/2020.02.20.957308v1)
+Accepted at ISBRA 2020 conference.
 
 [Kraken 2 webpage](https://ccb.jhu.edu/software/kraken2/)
