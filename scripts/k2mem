@@ -120,12 +120,12 @@ if (! $keep_map) {
 }
 
 #Create new files if not exist
-if (! -e $hash_plus) {  
-	open($lfh, '>', $hash_plus) or
-	 die "Unable to open file $hash_plus : $!";
-	close($lfh) or 
-    die "Unable to close file : $hash_plus $!";
-}
+#if (! -e $hash_plus) {  
+#	open($lfh, '>', $hash_plus) or
+#	 die "Unable to open file $hash_plus : $!";
+#	close($lfh) or 
+#    die "Unable to close file : $hash_plus $!";
+#}
 
 if ($paired && ((@ARGV % 2) != 0 || @ARGV == 0)) {
   die "$PROG: --paired requires positive and even number filenames\n";

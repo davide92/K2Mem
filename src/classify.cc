@@ -228,24 +228,24 @@ void ReportStats(struct timeval time1, struct timeval time2,
           seconds,
           stats.total_sequences / 1.0e3 / (seconds / 60),
           stats.total_bases / 1.0e6 / (seconds / 60) );
-  fprintf(stderr, "  %llu sequences classified (%.2f%%)\n",
+  fprintf(stderr, "  %llu sequences classified (%.6f)\n",
           (unsigned long long) stats.total_classified,
           stats.total_classified * 100.0 / stats.total_sequences);
-  fprintf(stderr, "  %llu sequences unclassified (%.2f%%)\n\n",
+  fprintf(stderr, "  %llu sequences unclassified (%.6f)\n\n",
           (unsigned long long) total_unclassified,
           total_unclassified * 100.0 / stats.total_sequences);
   fprintf(stderr, "GENUS LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at genus level.\n", 
           (unsigned long long) stats.total_assegned_g);
-  fprintf(stderr, "  precision at genus level: %.2f%%.\n", precision_g * 100.0);
-  fprintf(stderr, "  recall at genus level: %.2f%%.\n", recall_g * 100.0);    
-  fprintf(stderr, "  f-measure at genus level: %.2f%%.\n\n", f_mesure_g * 100.0);
+  fprintf(stderr, "  precision at genus level: %.6f.\n", precision_g);
+  fprintf(stderr, "  recall at genus level: %.6f.\n", recall_g);    
+  fprintf(stderr, "  f-measure at genus level: %.6f.\n\n", f_mesure_g);
   fprintf(stderr, "SPECIES LEVEL DATA\n");
   fprintf(stderr, "  %llu sequences classified at species level.\n", 
           (unsigned long long) stats.total_assegned_s);
-  fprintf(stderr, "  precision at species level: %.2f%%.\n", precision_s * 100.0);
-  fprintf(stderr, "  recall at species level: %.2f%%.\n", recall_s * 100.0);
-  fprintf(stderr, "  f-measure at species level: %.2f%%.\n", f_mesure_s * 100.0);
+  fprintf(stderr, "  precision at species level: %.6f.\n", precision_s);
+  fprintf(stderr, "  recall at species level: %.6f.\n", recall_s);
+  fprintf(stderr, "  f-measure at species level: %.6f.\n", f_mesure_s);
   
 }
 
@@ -378,6 +378,8 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   has_genus = true;
                 } else if (IsOther(tax, node)) {
                   has_genus = true;
+                } else if (node.external_id == 0) {
+                  has_genus = true;
                 } else {
                   node = tax.nodes()[node.parent_id];
                 }
@@ -386,14 +388,15 @@ void ProcessFiles(const char *filename1, const char *filename2,
               found = true;
             } else if (IsOther(tax, node)) {
               found = true;
-            }
-            else {
+            } else if (node.external_id == 0) {
+              found = true;
+            } else {
               node = tax.nodes()[node.parent_id];
             }
           }
 
           /* <--- end added part ---> */
-          /* <--- end added part ---> */
+          
           seq1.header += buffer;
           seq2.header += buffer;
           c1_oss << seq1.to_string();
@@ -914,7 +917,7 @@ void usage(int exit_code) {
        << "  -U filename      Filename/format to have unclassified sequences" << endl
        << "  -O filename      Output file for normal Kraken output" << endl
        << "  -l NUM           Number of times the additional hash map is updated" << endl
-       << "  -c               Classify after the additional hash map is builded/upadted" << endl;
+       << "  -c               Classify after the additional hash map is builded/updated" << endl;
        
   exit(exit_code);
 }

@@ -415,7 +415,9 @@ void ProcessFiles(const char *filename1, const char *filename2,
                   has_genus = true;
                 } else if (IsOther(tax, node)) {
                   has_genus = true;
-                } else {
+                } else if (node.external_id == 0) {
+                  has_genus = true;
+            	} else {
                   node = tax.nodes()[node.parent_id];
                 }
               }
@@ -423,8 +425,9 @@ void ProcessFiles(const char *filename1, const char *filename2,
               found = true;
             } else if (IsOther(tax, node)) {
               found = true;
-            }
-            else {
+            }else if (node.external_id == 0) {
+                  found = true;
+            } else {
               node = tax.nodes()[node.parent_id];
             }
           }
@@ -739,18 +742,20 @@ taxid_t ClassifySequence(Sequence &dna, Sequence &dna2, ostringstream &koss,
     koss << endl;
   }
 
-  if (call) {
+  bool is_species = false;
+
+  if (call && taxonomy.nodes()[call].external_id > 0) {
     auto node = taxonomy.nodes()[call];
-    bool is_species = false;
-    bool found = false;   
+    bool found = false;
     while(!found) {
       if (IsSpecies(taxonomy, node)) {
         is_species = true;
         found = true;
       } else if (IsOther(taxonomy, node) || IsGenus(taxonomy, node)) {
         found = true;
-      }
-      else {
+      } else if (node.external_id == 0) {
+      	found = true;
+      } else {
         node = taxonomy.nodes()[node.parent_id];
       }
     }
@@ -1002,6 +1007,6 @@ void usage(int exit_code) {
        << "  -U filename      Filename/format to have unclassified sequences" << endl
        << "  -O filename      Output file for normal Kraken output" << endl
        << "  -l NUM           Number of times the additional hash map is updated" << endl
-       << "  -c               Classify after the additional hash map is builded/upadted" << endl;
+       << "  -c               Classify after the additional hash map is builded/updated" << endl;
   exit(exit_code);
 }

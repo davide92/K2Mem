@@ -33,10 +33,13 @@ namespace kraken2 {
 
     			Add(key, value);    		
 	    	}
+	    } else if (!ifile.is_open()) {
+	    	ofstream outfile (filename);
+			outfile << "";
+			outfile.close();
+	    }
 
-		    ifile.close();
-	    } 
-		
+	    ifile.close();
 	}
 
 	void AdditionalMap::AddPair(uint64_t minimizer, taxid_t tax_id, Taxonomy &taxonomy) {
